@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.30 (Audio Engine)</title>
+  <title>DEC●PO v0.31 (iOS Unlocked)</title>
   <style>
     body { margin: 0; padding: 0; background: #0a0a14; color: #e0e0e0; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: linear-gradient(90deg, #0a0a14 0%, #0d1a2e 50%, #0a0a14 100%); border-bottom: 1px solid #00d4ff33; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -16,7 +16,7 @@
     
     .roll-container { max-width: 100vw; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .step-header { display: flex; padding-left: 68px; border-bottom: 1px solid #1a1a2e; width: max-content; }
-    .step-num { width: 28px; min-width: 28px; text-content: center; text-align: center; font-size: 9px; padding: 4px 0; transition: background 0.1s; }
+    .step-num { width: 28px; min-width: 28px; text-align: center; font-size: 9px; padding: 4px 0; }
     .step-num.active-step { background: #00ff8833; color: #00ff88 !important; font-weight: bold; }
     
     .grid-row { display: flex; align-items: center; border-bottom: 1px solid #111; }
@@ -38,7 +38,6 @@
 </head>
 <body>
 
-  <!-- Header -->
   <div class="header">
     <span class="logo">DEC●PO</span>
     <button id="btn-roll" class="mode-btn active" onclick="switchMode('roll')">ROLL</button>
@@ -48,13 +47,11 @@
     <button id="btn-play" class="play-btn" onclick="togglePlay()">▶ PLAY</button>
   </div>
 
-  <!-- Piano Roll View -->
   <div id="view-roll" class="roll-container">
     <div class="step-header" id="step-header-content"></div>
     <div id="grid-content" style="overflow-y: auto; max-height: calc(100vh - 140px); width: max-content;"></div>
   </div>
 
-  <!-- ST/GT View -->
   <div id="view-stgt" class="stgt-container">
     <div class="stgt-table">
       <div class="stgt-header">
@@ -67,7 +64,6 @@
     </div>
   </div>
 
-  <!-- Editor Modal -->
   <div id="edit-modal" class="modal">
     <div style="display: flex; flex-direction: column; gap: 8px;">
       <div style="display: flex; gap: 6px; justify-content: space-between; align-items: center;">
@@ -97,7 +93,6 @@
     let currentEditIdx = null;
     let currentForm = { note: "C4", st: 16, gt: 12, vel: 100 };
 
-    // 再生エンジン用変数
     let audioCtx = null;
     let isPlaying = false;
     let currentStep = 0;
@@ -145,7 +140,6 @@
       }
     }
 
-    // 周波数変換（A4 = 440Hz基準）
     function noteToFreq(note) {
       const scale = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
       const match = note.match(/^([A-G]#?)(\d)$/);
@@ -156,35 +150,42 @@
       return 440 * Math.pow(2, (midi - 69) / 12);
     }
 
-    // 音を1発鳴らす（ピコピコ矩形波仕様）
     function playTone(freq) {
       if (!audioCtx) return;
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       
-      osc.type = 'triangle'; // レトロで耳に優しい三角波
+      osc.type = 'sine'; // 一番安全で太いレトロサイン波
       osc.frequency.value = freq;
       
       const now = audioCtx.currentTime;
-      gain.gain.setValueAtTime(0.15, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12); // スパッと切れるゲートタイム
+      gain.gain.setValueAtTime(0.2, now);
+      // バグの温床だった指数関数を廃止し、直線で確実に音量を0に落とすでやんす！
+      gain.gain.linearRampToValueAtTime(0.0, now + 0.1); 
       
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       
       osc.start(now);
-      osc.stop(now + 0.15);
+      osc.stop(now + 0.12);
     }
 
-    // 再生のON/OFFスイッチ
     function togglePlay() {
-      // iOS対策：ユーザーのタップ時にAudioContextを生成・起動するでやんす
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
       if (audioCtx.state === 'suspended') {
         audioCtx.resume();
       }
+
+      // 【最強のiOSハック】ボタンを押したこの瞬間に、超微小なダミー音を流してSafariの耳を強制開通！
+      const dummyOsc = audioCtx.createOscillator();
+      const dummyGain = audioCtx.createGain();
+      dummyGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+      dummyOsc.connect(dummyGain);
+      dummyGain.connect(audioCtx.destination);
+      dummyOsc.start();
+      dummyOsc.stop(audioCtx.currentTime + 0.01);
 
       const btn = document.getElementById('btn-play');
       if (isPlaying) {
@@ -211,19 +212,18 @@
 
     function runSequencer() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      // 16分音符の間隔（ミリ秒） = (60秒 / BPM) / 4つ
       const interval = (60 / bpm / 4) * 1000;
       
       const stepExecution = () => {
         clearHighlight();
         
-        // ヘッダーとセルの縦ラインをハイライト
-        document.getElementById(`header-step-${currentStep}`).classList.add('active-step');
+        const headerCell = document.getElementById(`header-step-${currentStep}`);
+        if (headerCell) headerCell.classList.add('active-step');
+        
         ALL_NOTES.forEach(note => {
           const cell = document.getElementById(`cell-${note}-${currentStep}`);
           if (cell) cell.classList.add('active-column');
           
-          // 音符がONなら鳴らす！
           if (gridData[note][currentStep]) {
             playTone(noteToFreq(note));
           }
@@ -232,13 +232,14 @@
         currentStep = (currentStep + 1) % 16;
       };
 
-      stepExecution(); // 1拍目を即時実行
+      stepExecution();
       timerId = setInterval(stepExecution, interval);
     }
 
     function clearHighlight() {
       for (let i = 0; i < 16; i++) {
-        document.getElementById(`header-step-${i}`).classList.remove('active-step');
+        const hc = document.getElementById(`header-step-${i}`);
+        if (hc) hc.classList.remove('active-step');
       }
       ALL_NOTES.forEach(note => {
         for (let i = 0; i < 16; i++) {
@@ -248,7 +249,6 @@
       });
     }
 
-    // 以下、ST/GT用のダミーロジック
     function renderStgtTable() {
       const container = document.getElementById('stgt-rows-content');
       container.innerHTML = stgtData.map((row, i) => `
@@ -273,7 +273,6 @@
     function deleteRow(idx) { stgtData.splice(idx, 1); renderStgtTable(); }
     function insertAfter(idx) { stgtData.splice(idx + 1, 0, { note: "C4", st: 16, gt: 12, vel: 100 }); openEdit(idx + 1); }
 
-    // 即時実行
     buildPianoRoll();
     buildModalSelect();
     buildModalStOptions();
