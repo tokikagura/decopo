@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.31 (iOS Unlocked)</title>
+  <title>DEC●PO v0.40 (GM Piano Mode)</title>
   <style>
     body { margin: 0; padding: 0; background: #0a0a14; color: #e0e0e0; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: linear-gradient(90deg, #0a0a14 0%, #0d1a2e 50%, #0a0a14 100%); border-bottom: 1px solid #00d4ff33; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -38,6 +38,7 @@
 </head>
 <body>
 
+  <!-- Header -->
   <div class="header">
     <span class="logo">DEC●PO</span>
     <button id="btn-roll" class="mode-btn active" onclick="switchMode('roll')">ROLL</button>
@@ -47,11 +48,13 @@
     <button id="btn-play" class="play-btn" onclick="togglePlay()">▶ PLAY</button>
   </div>
 
+  <!-- Piano Roll View -->
   <div id="view-roll" class="roll-container">
     <div class="step-header" id="step-header-content"></div>
     <div id="grid-content" style="overflow-y: auto; max-height: calc(100vh - 140px); width: max-content;"></div>
   </div>
 
+  <!-- ST/GT View -->
   <div id="view-stgt" class="stgt-container">
     <div class="stgt-table">
       <div class="stgt-header">
@@ -64,6 +67,7 @@
     </div>
   </div>
 
+  <!-- Editor Modal -->
   <div id="edit-modal" class="modal">
     <div style="display: flex; flex-direction: column; gap: 8px;">
       <div style="display: flex; gap: 6px; justify-content: space-between; align-items: center;">
@@ -150,24 +154,51 @@
       return 440 * Math.pow(2, (midi - 69) / 12);
     }
 
+    // ★GM規格#1 Acoustic Grand Pianoをエミュレートする音響エンジン
     function playTone(freq) {
       if (!audioCtx) return;
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      
-      osc.type = 'sine'; // 一番安全で太いレトロサイン波
-      osc.frequency.value = freq;
-      
       const now = audioCtx.currentTime;
-      gain.gain.setValueAtTime(0.2, now);
-      // バグの温床だった指数関数を廃止し、直線で確実に音量を0に落とすでやんす！
-      gain.gain.linearRampToValueAtTime(0.0, now + 0.1); 
-      
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      
-      osc.start(now);
-      osc.stop(now + 0.12);
+
+      // 1. 基音（ふくよかで芯のある音を作るための三角波）
+      const oscBase = audioCtx.createOscillator();
+      const gainBase = audioCtx.createGain();
+      oscBase.type = 'triangle';
+      oscBase.frequency.value = freq;
+
+      // 2. 高次倍音（ピアノのきらびやかさと弦の金属感を出すサイン波：1オクターブ上）
+      const oscOvertone = audioCtx.createOscillator();
+      const gainOvertone = audioCtx.createGain();
+      oscOvertone.type = 'sine';
+      oscOvertone.frequency.value = freq * 2;
+
+      // 3. アタック音（ハンマーが弦を叩いた瞬間の「カチッ」とした硬い成分）
+      const oscAttack = audioCtx.createOscillator();
+      const gainAttack = audioCtx.createGain();
+      oscAttack.type = 'sine';
+      oscAttack.frequency.value = freq * 3.5; // あえて整数倍を崩してリアルな衝撃音に
+
+      // --- ピアノ特有の減衰（エンベロープ）設計 ---
+      // 基音：アタックは最大、そこから400ミリ秒かけて優雅に「ポーン」と減衰
+      gainBase.gain.setValueAtTime(0.25, now);
+      gainBase.gain.linearRampToValueAtTime(0.0, now + 0.45);
+
+      // 倍音：基音よりも早く消える（250ミリ秒）ことで、音が細くなっていく質感を再現
+      gainOvertone.gain.setValueAtTime(0.1, now);
+      gainOvertone.gain.linearRampToValueAtTime(0.0, now + 0.25);
+
+      // ハンマーアタック：最初の50ミリ秒だけガツンと鳴らして即座に消去
+      gainAttack.gain.setValueAtTime(0.12, now);
+      gainAttack.gain.linearRampToValueAtTime(0.0, now + 0.04);
+
+      // 全てをミキシングして出力へ接続
+      oscBase.connect(gainBase); gainBase.connect(audioCtx.destination);
+      oscOvertone.connect(gainOvertone); gainOvertone.connect(audioCtx.destination);
+      oscAttack.connect(gainAttack); gainAttack.connect(audioCtx.destination);
+
+      // 演奏開始と、余韻を含めた完全停止
+      oscBase.start(now); oscBase.stop(now + 0.5);
+      oscOvertone.start(now); oscOvertone.stop(now + 0.3);
+      oscAttack.start(now); oscAttack.stop(now + 0.05);
     }
 
     function togglePlay() {
@@ -178,7 +209,6 @@
         audioCtx.resume();
       }
 
-      // 【最強のiOSハック】ボタンを押したこの瞬間に、超微小なダミー音を流してSafariの耳を強制開通！
       const dummyOsc = audioCtx.createOscillator();
       const dummyGain = audioCtx.createGain();
       dummyGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
