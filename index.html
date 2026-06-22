@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.56.6 (iOS Audio Fix)</title>
+  <title>DEC●PO v0.56.6 (iOS Audio Fix Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #000000; color: #00e5ff; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: #000000; border-bottom: 2px solid #00e5ff; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -285,7 +285,7 @@
       const songData = { version: "v0.56.6", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v0566_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0565_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
@@ -360,7 +360,13 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v0566_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0565_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+    }
+
+
+    function noteToFreq(note) {
+      const midi = noteToMidi(note);
+      return 440 * Math.pow(2, (midi - 69) / 12);
     }
 
     function playTone(freq, oscType) {
@@ -423,12 +429,6 @@
         
         // 100%主殿のタップジェスチャー特権を背負った、新規ピチピチのAudioContextをその場でビルド！
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-        // iOS Safari対策：生成直後は suspended になる場合があるため明示的に再開
-        if (audioCtx.state === 'suspended') {
-          audioCtx.resume().catch(() => {});
-        }
-
         noiseBuffer = null; // ドラムバッファも完全同期リセット
 
         // 強制アンロック用の無音パルス
