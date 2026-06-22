@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.51 (Famicom 5-Track Edition)</title>
+  <title>DEC●PO v0.52 (Infinite Scroll Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #0a0a14; color: #e0e0e0; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: linear-gradient(90deg, #0a0a14 0%, #0d1a2e 50%, #0a0a14 100%); border-bottom: 1px solid #00d4ff33; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -17,7 +17,7 @@
     /* iPhone SE横幅最適化 FILEコントロールバー */
     .file-bar { background: #0d1220; border-bottom: 1px solid #00d4ff22; padding: 4px 12px; display: flex; gap: 6px; font-size: 11px; justify-content: flex-start; }
     
-    /* v0.51新設：トラック選択コンベアバー */
+    /* トラック選択コンベアバー */
     .track-bar { background: #07070d; border-bottom: 1px solid #00d4ff11; padding: 4px 12px; display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .track-btn { background: #0d1a2e; border: 1px solid #00d4ff33; color: #666; padding: 3px 8px; font-size: 10px; cursor: pointer; font-weight: bold; white-space: nowrap; }
     .track-btn.active { background: #00d4ff11; color: #00d4ff; border-color: #00d4ff; }
@@ -65,7 +65,7 @@
     <input type="file" id="file-loader" accept=".json" style="display: none;" onchange="loadFile(event)">
   </div>
 
-  <!-- v0.51新設：ファミコン5トラック・コンベア切り替えバー -->
+  <!-- トラック選択コンベアバー -->
   <div class="track-bar" id="track-bar-content"></div>
 
   <!-- Piano Roll View -->
@@ -112,7 +112,7 @@
     const ST_OPTIONS = [1,2,3,4,6,8,12,16,24,32,48,96];
     const ST_LABELS = { 1:"64分", 2:"32分", 3:"付点32", 4:"16分", 6:"付点16", 8:"8分", 12:"付点8", 16:"4分", 24:"付点4", 32:"2分", 48:"全音符", 96:"全×2" };
 
-    // v0.51 ファミコン5トラック・インフラ定義
+    // v0.52 ファミコン5トラック・インフラ定義
     const TRACKS = [
       { name: "TK1 矩形1", type: "synth", osc: "square" },
       { name: "TK2 矩形2", type: "synth", osc: "square" },
@@ -123,16 +123,19 @@
     const DRUM_TYPES = ["OH", "CH", "SD", "BD"];
     let currentTrackIdx = 0;
 
-    // トラック個別のメモリ割り当て
-    let synthTracksData = Array(4).fill(null).map(() => Object.fromEntries(ALL_NOTES.map(n => [n, Array(16).fill(false)])));
-    let drumTrackData = Object.fromEntries(DRUM_TYPES.map(d => [d, Array(16).fill(false)]));
+    // ★v0.52拡張：初期状態は余裕を持たせて32ステップ（2小節）からスタート
+    let totalSteps = 32; 
+
+    // トラック個別の可変配列メモリ初期化
+    let synthTracksData = Array(4).fill(null).map(() => Object.fromEntries(ALL_NOTES.map(n => [n, Array(totalSteps).fill(false)])));
+    let drumTrackData = Object.fromEntries(DRUM_TYPES.map(d => [d, Array(totalSteps).fill(false)]));
 
     let stgtData = [];
     let currentEditIdx = null;
     let currentForm = { note: "C4", st: 16, gt: 12, vel: 100 };
 
     let audioCtx = null;
-    let noiseBuffer = null; // ドラム用ホワイトノイズキャッシュ
+    let noiseBuffer = null; 
     let isPlaying = false;
     let currentStep = 0;
     let timerId = null;
@@ -159,24 +162,55 @@
       if(mode === 'stgt') renderStgtTable();
     }
 
+    // ★v0.52新設：右スクロール時に自動で1小節（16ステップ）ずつ拡張するバックエンドシステム
+    function checkAndAppendBar(e) {
+      const el = e.target;
+      // スクロールが右端から50px以内に接近したかを監査
+      if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 50) {
+        const prevScrollLeft = el.scrollLeft;
+
+        // 全通常トラックのケツに1小節（16ステップ分）の虚無をデポジット
+        for (let t = 0; t < 4; t++) {
+          ALL_NOTES.forEach(note => {
+            synthTracksData[t][note].push(...Array(16).fill(false));
+          });
+        }
+        // ドラムトラックも同様に同期拡張
+        DRUM_TYPES.forEach(type => {
+          drumTrackData[type].push(...Array(16).fill(false));
+        });
+
+        totalSteps += 16;
+        buildPianoRoll();
+        
+        // 再レンダリングによる画面のガタつき（スクロール位置の初期化）をヘッジ
+        el.scrollLeft = prevScrollLeft;
+      }
+    }
+
     function buildPianoRoll() {
       const header = document.getElementById('step-header-content');
-      header.innerHTML = Array(16).fill(0).map((_, i) => `
-        <div class="step-num" id="header-step-${i}" style="color: ${i % 4 === 0 ? '#00d4ff' : '#333'}; border-left: ${i % 4 === 0 ? '1px solid #00d4ff22' : '1px solid #1a1a2e'}">${i + 1}</div>
-      `).join('');
+      // 小節の頭（1, 17, 33...）と拍の頭（5, 9, 13...）でグリッド境界線を最適化
+      header.innerHTML = Array(totalSteps).fill(0).map((_, i) => {
+        const isBarStart = i % 16 === 0;
+        const isBeatStart = i % 4 === 0;
+        let color = isBarStart ? '#00ff88' : (isBeatStart ? '#00d4ff' : '#333');
+        let border = isBarStart ? '1px solid #00ff8844' : (isBeatStart ? '1px solid #00d4ff11' : '1px solid #1a1a2e');
+        let weight = isBarStart ? 'bold' : 'normal';
+        return `<div class="step-num" id="header-step-${i}" style="color: ${color}; font-weight: ${weight}; border-left: ${border}">${i + 1}</div>`;
+      }).join('');
 
       const grid = document.getElementById('grid-content');
       const isDrum = TRACKS[currentTrackIdx].type === "drum";
 
       if (!isDrum) {
-        // 通常シンセトラック描画
         grid.innerHTML = ALL_NOTES.map(note => {
           const isBlack = BLACK_NOTES.includes(note.replace(/\d/, ""));
           const isC = note.startsWith("C") && !note.includes("#");
           return `
             <div class="grid-row" style="border-bottom: ${isC ? '1px solid #00d4ff22' : '1px solid #111'}; background: ${isBlack ? '#0d0d18' : '#0a0a14'};">
               <div class="note-label" style="color: ${isBlack ? '#ff6b35' : (isC ? '#00d4ff' : '#555')}; font-weight: ${isC ? 'bold' : 'normal'};">${note}</div>
-              ${Array(16).fill(0).map((_, step) => {
+              ${Array(totalSteps).fill(0).map((_, step) => {
                 const isActive = synthTracksData[currentTrackIdx][note] && synthTracksData[currentTrackIdx][note][step];
                 let bg = step % 4 === 0 ? '#0d1220' : 'transparent';
                 let shadow = 'none';
@@ -184,20 +218,20 @@
                   bg = isBlack ? '#ff6b35' : '#00d4ff';
                   shadow = `0 0 8px ${isBlack ? '#ff6b3588' : '#00d4ff88'}`;
                 }
+                let cellBorderLeft = step % 16 === 0 ? '1px solid #00ff8844' : (step % 4 === 0 ? '1px solid #00d4ff11' : '1px solid #111');
                 return `
-                  <div class="cell" id="cell-${note}-${step}" onclick="toggleCell('${note}', ${step})" style="background: ${bg}; box-shadow: ${shadow}; border-left: ${step % 4 === 0 ? '1px solid #00d4ff11' : '1px solid #111'};"></div>
+                  <div class="cell" id="cell-${note}-${step}" onclick="toggleCell('${note}', ${step})" style="background: ${bg}; box-shadow: ${shadow}; border-left: ${cellBorderLeft};"></div>
                 `;
               }).join('')}
             </div>
           `;
         }).join('');
       } else {
-        // v0.51新設：ドラム専用トラックUI描画
         grid.innerHTML = DRUM_TYPES.map(type => {
           return `
             <div class="grid-row" style="border-bottom: 1px solid #00ff8822; background: #0a0a14; height: 32px;">
               <div class="note-label" style="color: #00ff88; font-weight: bold; font-size: 11px;">${type}</div>
-              ${Array(16).fill(0).map((_, step) => {
+              ${Array(totalSteps).fill(0).map((_, step) => {
                 const isActive = drumTrackData[type] && drumTrackData[type][step];
                 let bg = step % 4 === 0 ? '#0d1220' : 'transparent';
                 let shadow = 'none';
@@ -205,8 +239,9 @@
                   bg = '#00ff88';
                   shadow = `0 0 8px #00ff8888`;
                 }
+                let cellBorderLeft = step % 16 === 0 ? '1px solid #00ff8844' : (step % 4 === 0 ? '1px solid #00ff8811' : '1px solid #111');
                 return `
-                  <div class="cell" id="cell-${type}-${step}" onclick="toggleCell('${type}', ${step})" style="background: ${bg}; box-shadow: ${shadow}; height:32px; border-left: ${step % 4 === 0 ? '1px solid #00ff8822' : '1px solid #111'};"></div>
+                  <div class="cell" id="cell-${type}-${step}" onclick="toggleCell('${type}', ${step})" style="background: ${bg}; box-shadow: ${shadow}; height:32px; border-left: ${cellBorderLeft};"></div>
                 `;
               }).join('')}
             </div>
@@ -244,7 +279,7 @@
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
       const songData = { 
-        version: "v0.51", 
+        version: "v0.52", 
         bpm: bpm, 
         synthTracksData: synthTracksData, 
         drumTrackData: drumTrackData,
@@ -253,7 +288,7 @@
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v051_${Date.now()}.json`; a.click();
+      a.href = url; a.download = `decopo_v052_${Date.now()}.json`; a.click();
       URL.revokeObjectURL(url);
     }
 
@@ -267,17 +302,19 @@
           const songData = JSON.parse(e.target.result);
           if (songData.bpm) { document.getElementById('bpm-val').value = songData.bpm; updateBpm(); }
           
-          // v0.50の下位互換救済処理
           if (songData.gridData && !songData.synthTracksData) {
             synthTracksData[0] = songData.gridData;
+            totalSteps = songData.gridData["C4"].length;
           } else if (songData.synthTracksData) {
             synthTracksData = songData.synthTracksData;
+            // ★v0.52互換パッチ：ロードされたデータ長から小節数を動的に逆算・完全復元
+            totalSteps = songData.synthTracksData[0]["C4"].length;
           }
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
           if (songData.stgtData) stgtData = songData.stgtData;
           
           switchTrack(0);
-          alert("5トラックマルチ編成データを完全に復元いたしやした！");
+          alert("拡張小節マルチ編成データを完全に復元いたしやした！");
         } catch (err) { alert("解析に失敗いたしやした。"); }
       };
       reader.readAsText(file); event.target.value = '';
@@ -297,56 +334,52 @@
       return buffer.reverse();
     }
 
-    // v0.51拡張：5トラック並列SMFバイナリ一括記帳エクスポート
+    // ★v0.52拡張：自動拡張された全小節を1クロックもズラさずに一括SMF記帳
     function exportMidiFile() {
       const header = [
-        0x4D, 0x47, 0x68, 0x64, // タイポ修正済 "MThd"
+        0x4D, 0x54, 0x72, 0x6B, // MThdパッチ
         0x00, 0x00, 0x00, 0x06, 
-        0x00, 0x00,             // フォーマット0
-        0x00, 0x01,             // 1トラックに全イベントを統合
-        0x00, 0x30              // タイムベース48
+        0x00, 0x00,             
+        0x00, 0x01,             
+        0x00, 0x30              
       ];
-      header[1] = 0x54; // 正確に "MThd" にパッチ
+      header[1] = 0x54; header[2] = 0x68; header[3] = 0x64; // "MThd"強制再校正
 
       let midiEvents = [];
       const stepDuration = 12; 
 
-      // 1. 通常シンセトラック (TK1〜TK4 -> MIDI ch1〜4) のイベント収集
       for (let t = 0; t < 4; t++) {
         ALL_NOTES.forEach(noteName => {
           const midiNum = noteToMidi(noteName);
-          for (let step = 0; step < 16; step++) {
+          for (let step = 0; step < totalSteps; step++) {
             if (synthTracksData[t][noteName] && synthTracksData[t][noteName][step]) {
               const onTime = step * stepDuration;
               const offTime = onTime + 11;
-              midiEvents.push({ time: onTime, type: (0x90 + t), note: midiNum, vel: 90 }); // Note On
-              midiEvents.push({ time: offTime, type: (0x80 + t), note: midiNum, vel: 0 });  // Note Off
+              midiEvents.push({ time: onTime, type: (0x90 + t), note: midiNum, vel: 90 }); 
+              midiEvents.push({ time: offTime, type: (0x80 + t), note: midiNum, vel: 0 });  
             }
           }
         });
       }
 
-      // 2. ドラムトラック (DRM -> MIDI ch10固定 / 内部コード0x99) のイベント収集
       const drumMidiMap = { "BD": 36, "SD": 38, "CH": 42, "OH": 46 };
       DRUM_TYPES.forEach(type => {
         const midiNum = drumMidiMap[type];
-        for (let step = 0; step < 16; step++) {
+        for (let step = 0; step < totalSteps; step++) {
           if (drumTrackData[type] && drumTrackData[type][step]) {
             const onTime = step * stepDuration;
             const offTime = onTime + 11;
-            midiEvents.push({ time: onTime, type: 0x99, note: midiNum, vel: 100 }); // Note On (ch10)
-            midiEvents.push({ time: offTime, type: 0x89, note: midiNum, vel: 0 });   // Note Off (ch10)
+            midiEvents.push({ time: onTime, type: 0x99, note: midiNum, vel: 100 }); 
+            midiEvents.push({ time: offTime, type: 0x89, note: midiNum, vel: 0 });   
           }
         }
       });
 
-      // 絶対時間（クロック数）で厳密にソート
       midiEvents.sort((a, b) => (a.time !== b.time) ? a.time - b.time : a.type - b.type);
 
       let trackData = [];
       let lastTime = 0;
 
-      // テンポ設定記帳
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
       const microsecondsPerBeat = Math.round(60000000 / bpm);
       trackData.push(0x00, 0xFF, 0x51, 0x03, 
@@ -355,7 +388,6 @@
         microsecondsPerBeat & 0xFF
       );
 
-      // デルタタイムに変換しながらバイナリストリームへトス
       midiEvents.forEach(ev => {
         let delta = ev.time - lastTime;
         lastTime = ev.time;
@@ -363,18 +395,18 @@
         trackData.push(ev.type, ev.note, ev.vel);
       });
 
-      trackData.push(0x00, 0xFF, 0x2F, 0x00); // End of Track
+      trackData.push(0x00, 0xFF, 0x2F, 0x00); 
 
       const trkLen = trackData.length;
       const trkHeader = [
-        0x4D, 0x54, 0x72, 0x6B, // "MTrk"
+        0x4D, 0x54, 0x72, 0x6B, 
         (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF
       ];
 
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob);
       const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v051_track_${Date.now()}.mid`; a.click();
+      a.href = url; a.download = `decopo_v052_track_${Date.now()}.mid`; a.click();
       URL.revokeObjectURL(url);
     }
 
@@ -384,7 +416,6 @@
       return 440 * Math.pow(2, ((12 * (parseInt(match[2], 10) + 1) + scale.indexOf(match[1])) - 69) / 12);
     }
 
-    // v0.51拡張：トラック固有のオシレーター種別を受け付けるように強化
     function playTone(freq, oscType) {
       if (!audioCtx) return; const now = audioCtx.currentTime;
       const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
@@ -404,12 +435,10 @@
       oscAttack.start(now); oscAttack.stop(now + 0.05);
     }
 
-    // v0.51新設：完全内製100%知財クリーン・ファミコン風ノイズ＆ピッチドラムエンジン
     function playDrum(type) {
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
 
-      // 100%ローカル雑音バッファのオンデマンド生成
       if (!noiseBuffer) {
         const bufferSize = audioCtx.sampleRate * 0.4;
         noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
@@ -418,46 +447,25 @@
       }
 
       if (type === "BD") {
-        // サイン波をマッハ急降下させる電子バスドラム
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(140, now);
-        osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.12);
-        gain.gain.setValueAtTime(0.6, now);
-        gain.gain.linearRampToValueAtTime(0.0, now + 0.14);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(now); osc.stop(now + 0.15);
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+        osc.type = "sine"; osc.frequency.setValueAtTime(140, now); osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.12);
+        gain.gain.setValueAtTime(0.6, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.14);
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + 0.15);
       } 
       else if (type === "SD") {
-        // ノイズのエンベロープで叩くスネア
-        const source = audioCtx.createBufferSource();
-        source.buffer = noiseBuffer;
-        const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.35, now);
-        gain.gain.linearRampToValueAtTime(0.0, now + 0.18);
-        source.connect(gain); gain.connect(audioCtx.destination);
-        source.start(now); source.stop(now + 0.19);
+        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.35, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.18);
+        source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + 0.19);
       } 
       else if (type === "CH") {
-        // 極短ノイズのクローズドハット
-        const source = audioCtx.createBufferSource();
-        source.buffer = noiseBuffer;
-        const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.22, now);
-        gain.gain.linearRampToValueAtTime(0.0, now + 0.03);
-        source.connect(gain); gain.connect(audioCtx.destination);
-        source.start(now); source.stop(now + 0.04);
+        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.22, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.03);
+        source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + 0.04);
       } 
       else if (type === "OH") {
-        // 長めの減衰ノイズのオープンハット
-        const source = audioCtx.createBufferSource();
-        source.buffer = noiseBuffer;
-        const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.linearRampToValueAtTime(0.0, now + 0.3);
-        source.connect(gain); gain.connect(audioCtx.destination);
-        source.start(now); source.stop(now + 0.31);
+        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.3);
+        source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + 0.31);
       }
     }
 
@@ -471,14 +479,13 @@
 
     function updateBpm() { if (isPlaying) { clearInterval(timerId); runSequencer(); } }
     
-    // v0.51拡張：全5トラックを完全並列スキャンして同時発音するマルチシーケンサー
+    // ★v0.52拡張：全小節を完全に自動追従してループするシーケンサーランタイム
     function runSequencer() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120; const interval = (60 / bpm / 4) * 1000;
       const stepExecution = () => {
         clearHighlight();
         const headerCell = document.getElementById(`header-step-${currentStep}`); if (headerCell) headerCell.classList.add('active-step');
         
-        // 1. 通常シンセトラック4本の一斉スキャン＆並列発音
         for (let t = 0; t < 4; t++) {
           ALL_NOTES.forEach(note => {
             if (synthTracksData[t][note] && synthTracksData[t][note][currentStep]) {
@@ -487,14 +494,10 @@
           });
         }
 
-        // 2. ドラムトラック（5トラック目）のスキャン＆発音
         DRUM_TYPES.forEach(type => {
-          if (drumTrackData[type] && drumTrackData[type][currentStep]) {
-            playDrum(type);
-          }
+          if (drumTrackData[type] && drumTrackData[type][currentStep]) { playDrum(type); }
         });
 
-        // 現在開いているトラックの縦軸ハイライト描画処理
         const isDrum = TRACKS[currentTrackIdx].type === "drum";
         if (!isDrum) {
           ALL_NOTES.forEach(note => {
@@ -506,18 +509,19 @@
           });
         }
         
-        currentStep = (currentStep + 1) % 16;
+        // 拡張された全ステップ（totalSteps）を動的に巡回
+        currentStep = (currentStep + 1) % totalSteps;
       };
       stepExecution(); timerId = setInterval(stepExecution, interval);
     }
 
     function clearHighlight() {
-      for (let i = 0; i < 16; i++) { const hc = document.getElementById(`header-step-${i}`); if (hc) hc.classList.remove('active-step'); }
+      for (let i = 0; i < totalSteps; i++) { const hc = document.getElementById(`header-step-${i}`); if (hc) hc.classList.remove('active-step'); }
       const isDrum = TRACKS[currentTrackIdx].type === "drum";
       if (!isDrum) {
-        ALL_NOTES.forEach(note => { for (let i = 0; i < 16; i++) { const cell = document.getElementById(`cell-${note}-${i}`); if (cell) cell.classList.remove('active-column'); } });
+        ALL_NOTES.forEach(note => { for (let i = 0; i < totalSteps; i++) { const cell = document.getElementById(`cell-${note}-${i}`); if (cell) cell.classList.remove('active-column'); } });
       } else {
-        DRUM_TYPES.forEach(type => { for (let i = 0; i < 16; i++) { const cell = document.getElementById(`cell-${type}-${i}`); if (cell) cell.classList.remove('active-column'); } });
+        DRUM_TYPES.forEach(type => { for (let i = 0; i < totalSteps; i++) { const cell = document.getElementById(`cell-${type}-${i}`); if (cell) cell.classList.remove('active-column'); } });
       }
     }
 
@@ -543,6 +547,9 @@
     function commitEdit() { currentForm.note = document.getElementById('modal-note').value; currentForm.gt = Number(document.getElementById('modal-gt').value); currentForm.vel = Number(document.getElementById('modal-vel').value); if (currentEditIdx === 'new') { stgtData.push({ ...currentForm }); } else { stgtData[currentEditIdx] = { ...currentForm }; } closeEdit(); }
     function deleteRow(idx) { stgtData.splice(idx, 1); renderStgtTable(); }
     function insertAfter(idx) { stgtData.splice(idx + 1, 0, { note: "C4", st: 16, gt: 12, vel: 100 }); openEdit(idx + 1); }
+
+    // ★v0.52新設：無限拡張イベントリスナーをコンベアにパイルダーオン
+    document.getElementById('view-roll').addEventListener('scroll', checkAndAppendBar);
 
     // インフラ初期大開通
     buildTrackBar();
