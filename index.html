@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.56.2 (Async Sync Edition)</title>
+  <title>DEC●PO v0.56.3 (Audio Unlocked Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #000000; color: #00e5ff; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: #000000; border-bottom: 2px solid #00e5ff; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -282,10 +282,10 @@
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.56.2", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
+      const songData = { version: "v0.56.3", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v0562_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0563_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
@@ -300,7 +300,7 @@
           if (songData.synthTracksData) { synthTracksData = songData.synthTracksData; totalSteps = songData.synthTracksData[0]["C4"].length; }
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
           if (songData.stgtTracksData) stgtTracksData = songData.stgtTracksData;
-          switchTrack(0); alert("非同期パッチ版データの同期完了でやんす！");
+          switchTrack(0); alert("過剰防衛パッチ版データの同期完了でやんす！");
         } catch (err) { alert("解析失敗でやんす。"); }
       };
       reader.readAsText(file); event.target.value = '';
@@ -360,18 +360,19 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v0562_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0563_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
     }
 
+    // ★v0.56.3修正：iOS非同期バグの原因だった「runningチェック安全弁」を完全撤去（型安全化）
     function playTone(freq, oscType) {
-      if (!audioCtx || audioCtx.state !== 'running') return; const now = audioCtx.currentTime;
+      if (!audioCtx) return; const now = audioCtx.currentTime;
       const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
       gainBase.gain.setValueAtTime(0.2, now); gainBase.gain.linearRampToValueAtTime(0.001, now + 0.4); 
       oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); oscBase.start(now); oscBase.stop(now + 0.45);
     }
 
     function playStgtTone(freq, duration, oscType, trackIdx) {
-      if (!audioCtx || audioCtx.state !== 'running') return; const now = audioCtx.currentTime;
+      if (!audioCtx) return; const now = audioCtx.currentTime;
       if (oscType === "noise" || trackIdx === 9) { playDrum("SD"); return; }
       const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
       gainBase.gain.setValueAtTime(0.2, now); gainBase.gain.linearRampToValueAtTime(0.001, now + duration);
@@ -379,7 +380,7 @@
     }
 
     function playDrum(type) {
-      if (!audioCtx || audioCtx.state !== 'running') return; const now = audioCtx.currentTime;
+      if (!audioCtx) return; const now = audioCtx.currentTime;
       if (!noiseBuffer) {
         const bufferSize = audioCtx.sampleRate * 0.4; noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const data = noiseBuffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
@@ -399,7 +400,7 @@
       }
     }
 
-    // ★v0.56.2超絶強化：async/awaitによるiOS音声チップの完全アクティベート同期化ハック
+    // ★v0.56.3超絶強化：iOS Safari/Chromeの絶対防御領域をこじ開ける無音パルス注入ハック
     async function togglePlay() {
       if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
       
@@ -411,9 +412,18 @@
         stgtLastPlayedIndex.fill(-1); clearHighlight(); 
       } 
       else { 
-        // ★発車前にiOS Safari/Chromeの音声空間を強制的にRunning状態へホールド（非同期ロック解除）
         if (audioCtx.state === 'suspended') { await audioCtx.resume(); }
         
+        // 【必殺：iOS Web Audio API Unlock機能のデポジット】
+        try {
+          const oscUnlock = audioCtx.createOscillator();
+          const gainUnlock = audioCtx.createGain();
+          gainUnlock.gain.setValueAtTime(0.0001, audioCtx.currentTime); // 人間には100%聞こえねぇ無音パルス
+          oscUnlock.connect(gainUnlock);
+          gainUnlock.connect(audioCtx.destination);
+          oscUnlock.start(0); oscUnlock.stop(0.001);
+        } catch(e) { /* 例外は型安全にヘッジ */ }
+
         isPlaying = true; btn.innerText = "■ STOP"; btn.classList.add('playing'); 
         const isRollMode = document.getElementById('btn-roll').classList.contains('active');
         if (isRollMode) { currentStep = 0; runSequencer(); } 
