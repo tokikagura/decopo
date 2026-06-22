@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.54 (ST/GT Sound Sequencer Edition)</title>
+  <title>DEC●PO v0.55 (Multi-Solo & Bar Limit Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #0a0a14; color: #e0e0e0; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: linear-gradient(90deg, #0a0a14 0%, #0d1a2e 50%, #0a0a14 100%); border-bottom: 1px solid #00d4ff33; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -14,9 +14,14 @@
     .play-btn.playing { background: #00ff88; color: #0a0a14; }
     .bpm-input { background: #0d1a2e; border: 1px solid #00d4ff44; color: #00d4ff; width: 42px; padding: 4px; text-align: center; font-size: 12px; }
     
-    /* iPhone SE横幅最適化 FILEコントロールバー */
+    /* FILEコントロールバー */
     .file-bar { background: #0d1220; border-bottom: 1px solid #00d4ff22; padding: 4px 12px; display: flex; gap: 6px; font-size: 11px; justify-content: flex-start; }
     
+    /* v0.55新設：ST/GT専用の再生オプションコントロールインフラ */
+    .stgt-ctrl-bar { padding: 4px 12px; display: flex; gap: 6px; font-size: 10px; background: #080810; border-bottom: 1px solid #00d4ff11; align-items: center; }
+    .stgt-ctrl-bar .mode-btn { padding: 2px 6px; font-size: 10px; border-color: #555; color: #888; }
+    .stgt-ctrl-bar .mode-btn.active { border-color: #00ff88; color: #00ff88; background: #00ff8811; }
+
     /* トラック選択コンベアバー */
     .track-bar { background: #07070d; border-bottom: 1px solid #00d4ff11; padding: 4px 12px; display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .track-btn { background: #0d1a2e; border: 1px solid #00d4ff33; color: #666; padding: 3px 8px; font-size: 10px; cursor: pointer; font-weight: bold; white-space: nowrap; }
@@ -38,7 +43,7 @@
     .stgt-header { display: grid; grid-template-columns: 24px 60px 110px 50px 50px 40px 40px; border-bottom: 1px solid #00d4ff22; padding: 6px 8px; font-size: 10px; color: #555; gap: 4px; }
     .stgt-row { display: grid; grid-template-columns: 24px 60px 110px 50px 50px 40px 40px; align-items: center; border-bottom: 1px solid #111; padding: 6px 8px; gap: 4px; cursor: pointer; }
     
-    /* 縦画面時のエディタモーダル */
+    /* 仮想テンキーエディタモーダル */
     .modal { position: fixed; bottom: 0; left: 0; right: 0; background: #0d1a2e; border-top: 1px solid #00d4ff66; padding: 10px 12px 24px; z-index: 200; display: none; box-shadow: 0 -4px 20px #000000aa; }
     .st-box { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
     .st-btn { background: #0a0a14; border: 1px solid #333; color: #aaa; padding: 4px 5px; font-size: 9px; cursor: pointer; }
@@ -46,14 +51,9 @@
     .ok-btn { background: #00ff88; border: 1px solid #00ff88; color: #0a0a14; padding: 4px 14px; font-size: 11px; font-weight: bold; cursor: pointer; }
     .modal-label { color: #555; font-size: 9px; display: block; margin-bottom: 2px; text-transform: uppercase; }
 
-    /* iPhone SEの横画面（Landscape）特化型UIレイアウト */
+    /* iPhone SE横画面（Landscape）特化レイアウト */
     @media (orientation: landscape) {
-      .modal {
-        top: 0; bottom: 0; left: auto; right: 0; width: 220px;
-        border-top: none; border-left: 1px solid #00d4ff66;
-        padding: 8px 10px; height: 100vh; box-sizing: border-box;
-        overflow-y: auto;
-      }
+      .modal { top: 0; bottom: 0; left: auto; right: 0; width: 220px; border-top: none; border-left: 1px solid #00d4ff66; padding: 8px 10px; height: 100vh; box-sizing: border-box; overflow-y: auto; }
       .modal-main-row { flex-direction: column !important; align-items: stretch !important; gap: 6px !important; }
       .modal-input-group { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
       .st-box { display: none !important; }
@@ -77,6 +77,15 @@
     <button class="mode-btn" style="border-color: #00d4ff; color: #00d4ff; padding: 2px 4px; font-size: 10px;" onclick="exportMidiFile()">🎹 MIDI</button>
     <button class="mode-btn" style="border-color: #ffb703; color: #ffb703; padding: 2px 4px; font-size: 10px;" onclick="triggerLoad()">📂 LOAD</button>
     <input type="file" id="file-loader" accept=".json" style="display: none;" onchange="loadFile(event)">
+  </div>
+
+  <div id="stgt-playback-options" class="stgt-ctrl-bar" style="display: none;">
+    <span style="color: #444;">TRACK:</span>
+    <button id="stgt-m-all" class="mode-btn active" onclick="setStgtPlayMode('all')">ALL TRK</button>
+    <button id="stgt-m-solo" class="mode-btn" onclick="setStgtPlayMode('solo')">SOLO (カレント)</button>
+    <span style="color: #444; margin-left: 6px;">RANGE:</span>
+    <button id="stgt-r-full" class="mode-btn active" onclick="setStgtRange('full')">FULL</button>
+    <button id="stgt-r-bar" class="mode-btn" onclick="setStgtRange('bar')">1-BAR LOOP</button>
   </div>
 
   <div class="track-bar" id="track-bar-content"></div>
@@ -158,7 +167,9 @@
     let synthTracksData = Array(4).fill(null).map(() => Object.fromEntries(ALL_NOTES.map(n => [n, Array(totalSteps).fill(false)])));
     let drumTrackData = Object.fromEntries(DRUM_TYPES.map(d => [d, Array(totalSteps).fill(false)]));
 
-    let stgtData = [];
+    // ★v0.55大拡張：ST/GT用数値を5トラック完全に独立化（マルチコンベア化）
+    let stgtTracksData = Array(5).fill(null).map(() => []);
+    
     let currentEditIdx = null;
     let currentForm = { note: "C4", st: 16, gt: 12, vel: 100 };
 
@@ -166,11 +177,16 @@
     let noiseBuffer = null; 
     let isPlaying = false;
     
-    // シーケンサー個別ポインタ
-    let currentStep = 0;   // ROLL用
-    let stgtIndex = 0;     // ★v0.54新設：ST/GT用ポインタ
+    // シーケンサー個別レジストリポインタ
+    let currentStep = 0;   // ROLL用ポインタ
     let timerId = null;    // ROLL用インターバルID
-    let stgtTimerId = null;// ★v0.54新設：ST/GT用タイムアウトID
+    
+    // ★v0.55新設：マルチトラックST/GT自律再生インフラ用変数
+    let stgtPlayMode = 'all'; // 'all' or 'solo'
+    let stgtRange = 'full';   // 'full' or 'bar'
+    let stgtIndices = [0, 0, 0, 0, 0];
+    let stgtTimerIds = [null, null, null, null, null];
+    let stgtAccumSt = [0, 0, 0, 0, 0]; // 1-BARループ計算用の累積STレジストリ
 
     function buildTrackBar() {
       const bar = document.getElementById('track-bar-content');
@@ -184,6 +200,7 @@
       currentTrackIdx = idx;
       buildTrackBar();
       buildPianoRoll();
+      if(document.getElementById('view-stgt').style.display === 'block') renderStgtTable();
     }
 
     function switchMode(mode) {
@@ -191,7 +208,22 @@
       document.getElementById('btn-stgt').classList.toggle('active', mode === 'stgt');
       document.getElementById('view-roll').style.display = mode === 'roll' ? 'block' : 'none';
       document.getElementById('view-stgt').style.display = mode === 'stgt' ? 'block' : 'none';
+      document.getElementById('stgt-playback-options').style.display = mode === 'stgt' ? 'flex' : 'none';
       if(mode === 'stgt') renderStgtTable();
+    }
+
+    function setStgtPlayMode(m) {
+      stgtPlayMode = m;
+      document.getElementById('stgt-m-all').classList.toggle('active', m === 'all');
+      document.getElementById('stgt-m-solo').classList.toggle('active', m === 'solo');
+      if (isPlaying) { togglePlay(); togglePlay(); } // 発音エンジンを安全に再起動（大開通）
+    }
+
+    function setStgtRange(r) {
+      stgtRange = r;
+      document.getElementById('stgt-r-full').classList.toggle('active', r === 'full');
+      document.getElementById('stgt-r-bar').classList.toggle('active', r === 'bar');
+      if (isPlaying) { togglePlay(); togglePlay(); }
     }
 
     function checkAndAppendBar(e) {
@@ -293,11 +325,11 @@
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.54", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtData: stgtData };
+      const songData = { version: "v0.55", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v054_${Date.now()}.json`; a.click();
+      a.href = url; a.download = `decopo_v055_${Date.now()}.json`; a.click();
       URL.revokeObjectURL(url);
     }
 
@@ -315,9 +347,15 @@
             totalSteps = songData.synthTracksData[0]["C4"].length;
           }
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
-          if (songData.stgtData) stgtData = songData.stgtData;
+          
+          // ★下位互換救済パッチ
+          if (songData.stgtTracksData) {
+            stgtTracksData = songData.stgtTracksData;
+          } else if (songData.stgtData) {
+            stgtTracksData[0] = songData.stgtData;
+          }
           switchTrack(0);
-          alert("データ復元に成功いたしやした！");
+          alert("拡張マルチインフラデータを完全同期いたしやした！");
         } catch (err) { alert("解析失敗でやんす。"); }
       };
       reader.readAsText(file); event.target.value = '';
@@ -382,7 +420,7 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob);
-      const a = document.createElement('a'); a.href = url; a.download = `decopo_v054_track_${Date.now()}.mid`; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `decopo_v055_track_${Date.now()}.mid`; a.click();
       URL.revokeObjectURL(url);
     }
 
@@ -404,22 +442,15 @@
       oscBase.start(now); oscBase.stop(now + 0.45); oscOvertone.start(now); oscOvertone.stop(now + 0.25); oscAttack.start(now); oscAttack.stop(now + 0.05);
     }
 
-    // ★v0.54新設：ST/GT数値入力用・可変ゲートタイム減衰シンセエンジン
     function playStgtTone(freq, duration, oscType) {
       if (!audioCtx) return; const now = audioCtx.currentTime;
+      if (oscType === "noise") { playDrum(currentTrackIdx === 4 ? "SD" : "CH"); return; } // ドラムトラック救済用パッチ
       const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
       const oscOvertone = audioCtx.createOscillator(); const gainOvertone = audioCtx.createGain(); oscOvertone.type = 'sine'; oscOvertone.frequency.value = freq * 2;
-      
-      gainBase.gain.setValueAtTime(0.25, now);
-      gainBase.gain.linearRampToValueAtTime(0.0, now + duration); // GTの長さに完全同期した決定論的減衰
-      gainOvertone.gain.setValueAtTime(0.08, now);
-      gainOvertone.gain.linearRampToValueAtTime(0.0, now + (duration * 0.6));
-      
-      oscBase.connect(gainBase); gainBase.connect(audioCtx.destination);
-      oscOvertone.connect(gainOvertone); gainOvertone.connect(audioCtx.destination);
-      
-      oscBase.start(now); oscBase.stop(now + duration + 0.05);
-      oscOvertone.start(now); oscOvertone.stop(now + duration + 0.05);
+      gainBase.gain.setValueAtTime(0.25, now); gainBase.gain.linearRampToValueAtTime(0.0, now + duration);
+      gainOvertone.gain.setValueAtTime(0.08, now); gainOvertone.gain.linearRampToValueAtTime(0.0, now + (duration * 0.6));
+      oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); oscOvertone.connect(gainOvertone); gainOvertone.connect(audioCtx.destination);
+      oscBase.start(now); oscBase.stop(now + duration + 0.05); oscOvertone.start(now); oscOvertone.stop(now + duration + 0.05);
     }
 
     function playDrum(type) {
@@ -444,19 +475,18 @@
       }
     }
 
-    // ★v0.54拡張：選択されている画面モード（ROLLかST/GTか）を自動検知して発音セクターを切り替え
     function togglePlay() {
       if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
       if (audioCtx.state === 'suspended') { audioCtx.resume(); }
       const btn = document.getElementById('btn-play');
       
       if (isPlaying) { 
-        // 演奏全面停止（全キャッシュクリア）
         isPlaying = false; 
         btn.innerText = "▶ PLAY"; 
         btn.classList.remove('playing'); 
         if (timerId) clearInterval(timerId); 
-        if (stgtTimerId) clearTimeout(stgtTimerId);
+        stgtTimerIds.forEach(tid => { if(tid) clearTimeout(tid); });
+        stgtTimerIds.fill(null);
         clearHighlight(); 
       } 
       else { 
@@ -464,26 +494,28 @@
         btn.innerText = "■ STOP"; 
         btn.classList.add('playing'); 
         
-        // アクティブなモードをパースしてコンベア選択
         const isRollMode = document.getElementById('btn-roll').classList.contains('active');
         if (isRollMode) {
-          currentStep = 0; 
-          runSequencer(); 
+          currentStep = 0; runSequencer(); 
         } else {
-          stgtIndex = 0;
-          runStgtSequencer(); // ★v0.54新設：ST/GT再生コンベア大開通！
+          // ★v0.55機能：ST/GT再生時の再生ポインタ・累積ST初期化
+          stgtIndices.fill(0);
+          stgtAccumSt.fill(0);
+          
+          if (stgtPlayMode === 'solo') {
+            // SOLOモード：そのトラックだけを数珠つなぎループ再生！
+            runStgtSequencer(currentTrackIdx);
+          } else {
+            // ALLモード：全5トラックを完全並列でチャカチャカ自律走行！
+            for (let t = 0; t < 5; t++) { runStgtSequencer(t); }
+          }
         }
       }
     }
 
-    function updateBpm() { 
-      if (isPlaying) { 
-        if (timerId) { clearInterval(timerId); runSequencer(); }
-        // ST/GTはsetTimeoutによる数珠つなぎのため自動追従
-      } 
-    }
+    function updateBpm() { if (isPlaying) { if (timerId) { clearInterval(timerId); runSequencer(); } } }
     
-    // ROLL画面用シーケンサーランタイム
+    // ROLL用シーケンサー
     function runSequencer() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120; const interval = (60 / bpm / 4) * 1000;
       const stepExecution = () => {
@@ -505,38 +537,47 @@
       stepExecution(); timerId = setInterval(stepExecution, interval);
     }
 
-    // ★v0.54新設：ST/GT数値リスト専用・1行ずつ数珠つなぎ独立発音エンジン
-    function runStgtSequencer() {
-      if (stgtData.length === 0) { togglePlay(); return; }
+    // ★v0.55超進化：独立トラック並列走査対応・ST/GT数珠つなぎエンジン
+    function runStgtSequencer(t) {
+      const data = stgtTracksData[t];
+      if (data.length === 0) return;
 
       const stepExecution = () => {
         if (!isPlaying) return;
 
-        // 再生位置のリアルタイム・ハイライト記帳
-        renderStgtTable();
-
-        const row = stgtData[stgtIndex];
-        const bpm = Number(document.getElementById('bpm-val').value) || 120;
-        
-        // 64分音符1個分（STの最小単位1）あたりの時間（秒数）を計算
-        const unitTime = (60 / bpm) / 16; 
-
-        // 発音セクターのトリガー
-        if (row.note && row.note !== "REST") {
-          const freq = noteToFreq(row.note);
-          const duration = row.gt * unitTime; // GTに準拠した長さ
-          // 現在選択されているトラックの音色でビキビキ鳴らす！
-          playStgtTone(freq, duration, TRACKS[currentTrackIdx].osc);
+        // カレント表示中のトラックならテーブルの緑発光ハイライトをリアルタイム更新
+        if (t === currentTrackIdx && document.getElementById('view-stgt').style.display === 'block') {
+          renderStgtTable();
         }
 
-        // 次の行へコンベアを進めるためのウエイト時間（ミリ秒）
-        const nextDelay = row.st * unitTime * 1000;
-        
-        // ポインタをインクリメント（末尾に達したらアタマにループ）
-        stgtIndex = (stgtIndex + 1) % stgtData.length;
+        let idx = stgtIndices[t];
+        const row = data[idx];
+        const bpm = Number(document.getElementById('bpm-val').value) || 120;
+        const unitTime = (60 / bpm) / 16; // 64分音符1個分(ST=1)の時間
 
-        // タイマーバッチを予約
-        stgtTimerId = setTimeout(stepExecution, nextDelay);
+        if (row.note && row.note !== "REST") {
+          const freq = noteToFreq(row.note);
+          const duration = row.gt * unitTime;
+          playStgtTone(freq, duration, TRACKS[t].osc);
+        }
+
+        const nextDelay = row.st * unitTime * 1000;
+        let nextIdx = (idx + 1) % data.length;
+
+        // ★v0.55新設：「その小節だけ」を制限ループする1-BAR判定インフラ
+        if (stgtRange === 'bar') {
+          stgtAccumSt[t] += row.st;
+          // 4分音符(ST16)×4発 = 64ステップが1小節
+          if (stgtAccumSt[t] >= 64 || nextIdx === 0) {
+            nextIdx = 0;       // 1小節に達したら強制的にアタマの行へロールバック！
+            stgtAccumSt[t] = 0; // 累積初期化
+          }
+        } else {
+          stgtAccumSt[t] = 0;
+        }
+
+        stgtIndices[t] = nextIdx;
+        stgtTimerIds[t] = setTimeout(stepExecution, nextDelay);
       };
 
       stepExecution();
@@ -550,19 +591,19 @@
       } else {
         DRUM_TYPES.forEach(type => { for (let i = 0; i < totalSteps; i++) { const cell = document.getElementById(`cell-${type}-${i}`); if (cell) cell.classList.remove('active-column'); } });
       }
-      // ST/GT画面がアクティブならハイライトを強制再描画してクリア
       if(document.getElementById('view-stgt').style.display === 'block') renderStgtTable();
     }
 
-    // ★v0.54拡張：現在再生中の行を眩い「緑色」に染め上げる超直感ハイライトUIパッチ
     function renderStgtTable() {
       const container = document.getElementById('stgt-rows-content');
       const isStgtMode = document.getElementById('btn-stgt').classList.contains('active');
+      const data = stgtTracksData[currentTrackIdx];
       
-      container.innerHTML = stgtData.map((row, i) => {
-        // 次に実行されるポインタの手前の行＝いま鳴っている現在行を逆算
+      container.innerHTML = data.map((row, i) => {
+        const idxCur = stgtIndices[currentTrackIdx];
+        // いま鳴っている現在行を逆算記帳
         const isCurrent = isPlaying && isStgtMode && (
-          stgtIndex === (i + 1) % stgtData.length || (stgtIndex === 0 && i === stgtData.length - 1)
+          idxCur === (i + 1) % data.length || (idxCur === 0 && i === data.length - 1)
         );
 
         let bg = isCurrent ? '#00ff8822' : (currentEditIdx === i ? '#0d1a2e' : 'transparent');
@@ -595,9 +636,7 @@
       updateModalUi(); 
     }
     
-    function syncFormSt(val) {
-      const v = Number(val); currentForm.st = v; updateModalUi();
-    }
+    function syncFormSt(val) { const v = Number(val); currentForm.st = v; updateModalUi(); }
 
     function updateModalUi() { 
       document.getElementById('modal-st-label').innerText = `ST: ${currentForm.st} ${ST_LABELS[currentForm.st] ? `(${ST_LABELS[currentForm.st]})` : ''}`; 
@@ -608,8 +647,9 @@
 
     function openEdit(idx) { 
       currentEditIdx = idx; 
+      const data = stgtTracksData[currentTrackIdx];
       if (idx === 'new') { currentForm = { note: "C4", st: 16, gt: 12, vel: 100 }; } 
-      else { currentForm = { ...stgtData[idx] }; } 
+      else { currentForm = { ...data[idx] }; } 
       document.getElementById('modal-note').value = currentForm.note; 
       document.getElementById('modal-st').value = currentForm.st;
       document.getElementById('modal-gt').value = currentForm.gt; 
@@ -620,18 +660,19 @@
     }
 
     function commitEdit() { 
+      const data = stgtTracksData[currentTrackIdx];
       currentForm.note = document.getElementById('modal-note').value; 
       currentForm.st = Number(document.getElementById('modal-st').value);
       currentForm.gt = Number(document.getElementById('modal-gt').value); 
       currentForm.vel = Number(document.getElementById('modal-vel').value); 
-      if (currentEditIdx === 'new') { stgtData.push({ ...currentForm }); } 
-      else { stgtData[currentEditIdx] = { ...currentForm }; } 
+      if (currentEditIdx === 'new') { data.push({ ...currentForm }); } 
+      else { data[currentEditIdx] = { ...currentForm }; } 
       closeEdit(); 
     }
 
     function closeEdit() { document.getElementById('edit-modal').style.display = 'none'; renderStgtTable(); }
-    function deleteRow(idx) { stgtData.splice(idx, 1); renderStgtTable(); }
-    function insertAfter(idx) { stgtData.splice(idx + 1, 0, { note: "C4", st: 16, gt: 12, vel: 100 }); openEdit(idx + 1); }
+    function deleteRow(idx) { stgtTracksData[currentTrackIdx].splice(idx, 1); renderStgtTable(); }
+    function insertAfter(idx) { stgtTracksData[currentTrackIdx].splice(idx + 1, 0, { note: "C4", st: 16, gt: 12, vel: 100 }); openEdit(idx + 1); }
 
     document.getElementById('view-roll').addEventListener('scroll', checkAndAppendBar);
 
