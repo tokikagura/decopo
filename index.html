@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.56.1 (BugFix Edition)</title>
+  <title>DEC●PO v0.56.2 (Async Sync Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #000000; color: #00e5ff; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: #000000; border-bottom: 2px solid #00e5ff; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -50,7 +50,6 @@
 </head>
 <body>
 
-  <!-- Header -->
   <div class="header">
     <span class="logo">DEC●PO</span>
     <button id="btn-roll" class="mode-btn active" onclick="switchMode('roll')">ROLL</button>
@@ -60,7 +59,6 @@
     <button id="btn-play" class="play-btn" onclick="togglePlay()">▶ PLAY</button>
   </div>
 
-  <!-- FILE Bar -->
   <div class="file-bar">
     <button class="mode-btn" style="border-color: #ffea00; color: #ffea00; padding: 2px 4px; font-size: 10px;" onclick="saveToFile()">💾 JSON</button>
     <button class="mode-btn" style="border-color: #00e5ff; color: #00e5ff; padding: 2px 4px; font-size: 10px;" onclick="exportMidiFile()">🎹 MIDI</button>
@@ -79,13 +77,11 @@
 
   <div class="track-bar" id="track-bar-content"></div>
 
-  <!-- Piano Roll View -->
   <div id="view-roll" class="roll-container">
     <div class="step-header" id="step-header-content"></div>
     <div id="grid-content" style="overflow-y: auto; max-height: calc(100vh - 195px); width: max-content;"></div>
   </div>
 
-  <!-- ST/GT View -->
   <div id="view-stgt" class="stgt-container">
     <div class="stgt-table">
       <div class="stgt-header">
@@ -98,7 +94,6 @@
     </div>
   </div>
 
-  <!-- Editor Modal -->
   <div id="edit-modal" class="modal">
     <div style="display: flex; flex-direction: column; gap: 8px;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #00e5ff44; padding-bottom: 4px;">
@@ -287,10 +282,10 @@
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.56.1", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
+      const songData = { version: "v0.56.2", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v0561_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0562_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
@@ -305,7 +300,7 @@
           if (songData.synthTracksData) { synthTracksData = songData.synthTracksData; totalSteps = songData.synthTracksData[0]["C4"].length; }
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
           if (songData.stgtTracksData) stgtTracksData = songData.stgtTracksData;
-          switchTrack(0); alert("バグフィックス版台帳の同期完了でやんす！");
+          switchTrack(0); alert("非同期パッチ版データの同期完了でやんす！");
         } catch (err) { alert("解析失敗でやんす。"); }
       };
       reader.readAsText(file); event.target.value = '';
@@ -365,18 +360,18 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v0561_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0562_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
     }
 
     function playTone(freq, oscType) {
-      if (!audioCtx) return; const now = audioCtx.currentTime;
+      if (!audioCtx || audioCtx.state !== 'running') return; const now = audioCtx.currentTime;
       const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
-      gainBase.gain.setValueAtTime(0.2, now); gainBase.gain.linearRampToValueAtTime(0.001, now + 0.4); // ★iOS安全フェード化
+      gainBase.gain.setValueAtTime(0.2, now); gainBase.gain.linearRampToValueAtTime(0.001, now + 0.4); 
       oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); oscBase.start(now); oscBase.stop(now + 0.45);
     }
 
     function playStgtTone(freq, duration, oscType, trackIdx) {
-      if (!audioCtx) return; const now = audioCtx.currentTime;
+      if (!audioCtx || audioCtx.state !== 'running') return; const now = audioCtx.currentTime;
       if (oscType === "noise" || trackIdx === 9) { playDrum("SD"); return; }
       const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
       gainBase.gain.setValueAtTime(0.2, now); gainBase.gain.linearRampToValueAtTime(0.001, now + duration);
@@ -384,7 +379,7 @@
     }
 
     function playDrum(type) {
-      if (!audioCtx) return; const now = audioCtx.currentTime;
+      if (!audioCtx || audioCtx.state !== 'running') return; const now = audioCtx.currentTime;
       if (!noiseBuffer) {
         const bufferSize = audioCtx.sampleRate * 0.4; noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const data = noiseBuffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
@@ -394,7 +389,6 @@
         gain.gain.setValueAtTime(0.6, now); gain.gain.linearRampToValueAtTime(0.001, now + 0.14);
         osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + 0.15);
       } else {
-        // ★OH, CH, SDのiOS最適化共通アロケータ
         const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain(); 
         let duration = 0.15;
         if (type === "CH") { gain.gain.setValueAtTime(0.22, now); duration = 0.03; }
@@ -405,9 +399,10 @@
       }
     }
 
-    function togglePlay() {
+    // ★v0.56.2超絶強化：async/awaitによるiOS音声チップの完全アクティベート同期化ハック
+    async function togglePlay() {
       if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-      if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+      
       const btn = document.getElementById('btn-play');
       if (isPlaying) { 
         isPlaying = false; btn.innerText = "▶ PLAY"; btn.classList.remove('playing'); 
@@ -416,6 +411,9 @@
         stgtLastPlayedIndex.fill(-1); clearHighlight(); 
       } 
       else { 
+        // ★発車前にiOS Safari/Chromeの音声空間を強制的にRunning状態へホールド（非同期ロック解除）
+        if (audioCtx.state === 'suspended') { await audioCtx.resume(); }
+        
         isPlaying = true; btn.innerText = "■ STOP"; btn.classList.add('playing'); 
         const isRollMode = document.getElementById('btn-roll').classList.contains('active');
         if (isRollMode) { currentStep = 0; runSequencer(); } 
@@ -439,7 +437,6 @@
           if (t === 9) continue;
           ALL_NOTES.forEach(note => { if (synthTracksData[t] && synthTracksData[t][note] && synthTracksData[t][note][currentStep]) { playTone(noteToFreq(note), TRACKS[t].osc); } });
         }
-        // ★v0.56.1大修正：OH, CH, SD, BDの4大アセットすべてをROLL再生エンジンに完全開通！！！
         if (drumTrackData["OH"] && drumTrackData["OH"][currentStep]) playDrum("OH");
         if (drumTrackData["CH"] && drumTrackData["CH"][currentStep]) playDrum("CH");
         if (drumTrackData["SD"] && drumTrackData["SD"][currentStep]) playDrum("SD");
