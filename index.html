@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.53 (Landscape Numeric Edition)</title>
+  <title>DEC●PO v0.54 (ST/GT Sound Sequencer Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #0a0a14; color: #e0e0e0; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: linear-gradient(90deg, #0a0a14 0%, #0d1a2e 50%, #0a0a14 100%); border-bottom: 1px solid #00d4ff33; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -36,9 +36,9 @@
     .stgt-container { padding: 0 0 280px 0; max-width: 100vw; overflow-x: auto; -webkit-overflow-scrolling: touch; display: none; }
     .stgt-table { width: 480px; }
     .stgt-header { display: grid; grid-template-columns: 24px 60px 110px 50px 50px 40px 40px; border-bottom: 1px solid #00d4ff22; padding: 6px 8px; font-size: 10px; color: #555; gap: 4px; }
-    .stgt-row { display: grid; grid-template-columns: 24px 60px 110px 50px 50px 40px 40px; align-items: center; border-bottom: 1px solid #111; padding: 6px 8px; gap: 4px; }
+    .stgt-row { display: grid; grid-template-columns: 24px 60px 110px 50px 50px 40px 40px; align-items: center; border-bottom: 1px solid #111; padding: 6px 8px; gap: 4px; cursor: pointer; }
     
-    /* v0.53最適化：縦画面時のエディタモーダル */
+    /* 縦画面時のエディタモーダル */
     .modal { position: fixed; bottom: 0; left: 0; right: 0; background: #0d1a2e; border-top: 1px solid #00d4ff66; padding: 10px 12px 24px; z-index: 200; display: none; box-shadow: 0 -4px 20px #000000aa; }
     .st-box { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
     .st-btn { background: #0a0a14; border: 1px solid #333; color: #aaa; padding: 4px 5px; font-size: 9px; cursor: pointer; }
@@ -46,7 +46,7 @@
     .ok-btn { background: #00ff88; border: 1px solid #00ff88; color: #0a0a14; padding: 4px 14px; font-size: 11px; font-weight: bold; cursor: pointer; }
     .modal-label { color: #555; font-size: 9px; display: block; margin-bottom: 2px; text-transform: uppercase; }
 
-    /* ★v0.53新設：iPhone SEの横画面（Landscape）特化型インフラUIレイアウト */
+    /* iPhone SEの横画面（Landscape）特化型UIレイアウト */
     @media (orientation: landscape) {
       .modal {
         top: 0; bottom: 0; left: auto; right: 0; width: 220px;
@@ -56,7 +56,7 @@
       }
       .modal-main-row { flex-direction: column !important; align-items: stretch !important; gap: 6px !important; }
       .modal-input-group { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
-      .st-box { display: none !important; /* 横画面時はテンキー入力に特化するためプリセットボタンを損切り */ }
+      .st-box { display: none !important; }
       .stgt-container { padding-bottom: 40px; }
     }
   </style>
@@ -144,7 +144,6 @@
     const ST_OPTIONS = [1,2,3,4,6,8,12,16,24,32,48,96];
     const ST_LABELS = { 1:"64分", 2:"32分", 3:"付点32", 4:"16分", 6:"付点16", 8:"8分", 12:"付点8", 16:"4分", 24:"付点4", 32:"2分", 48:"全音符", 96:"全×2" };
 
-    // v0.53 ファミコン5トラック・インフラ定義
     const TRACKS = [
       { name: "TK1 矩形1", type: "synth", osc: "square" },
       { name: "TK2 矩形2", type: "synth", osc: "square" },
@@ -154,11 +153,8 @@
     ];
     const DRUM_TYPES = ["OH", "CH", "SD", "BD"];
     let currentTrackIdx = 0;
-
-    // v0.52 継承：初期状態は32ステップ（2小節）自動拡張バッファ
     let totalSteps = 32; 
 
-    // トラック個別メモリ
     let synthTracksData = Array(4).fill(null).map(() => Object.fromEntries(ALL_NOTES.map(n => [n, Array(totalSteps).fill(false)])));
     let drumTrackData = Object.fromEntries(DRUM_TYPES.map(d => [d, Array(totalSteps).fill(false)]));
 
@@ -169,8 +165,12 @@
     let audioCtx = null;
     let noiseBuffer = null; 
     let isPlaying = false;
-    let currentStep = 0;
-    let timerId = null;
+    
+    // シーケンサー個別ポインタ
+    let currentStep = 0;   // ROLL用
+    let stgtIndex = 0;     // ★v0.54新設：ST/GT用ポインタ
+    let timerId = null;    // ROLL用インターバルID
+    let stgtTimerId = null;// ★v0.54新設：ST/GT用タイムアウトID
 
     function buildTrackBar() {
       const bar = document.getElementById('track-bar-content');
@@ -194,7 +194,6 @@
       if(mode === 'stgt') renderStgtTable();
     }
 
-    // v0.52 継承：オート・バー・アペンド（無限右スクロール）
     function checkAndAppendBar(e) {
       const el = e.target;
       if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 50) {
@@ -294,11 +293,11 @@
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.53", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtData: stgtData };
+      const songData = { version: "v0.54", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtData: stgtData };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v053_${Date.now()}.json`; a.click();
+      a.href = url; a.download = `decopo_v054_${Date.now()}.json`; a.click();
       URL.revokeObjectURL(url);
     }
 
@@ -318,8 +317,8 @@
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
           if (songData.stgtData) stgtData = songData.stgtData;
           switchTrack(0);
-          alert("拡張小節マルチ編成データを完全に復元いたしやした！");
-        } catch (err) { alert("解析に失敗いたしやした。"); }
+          alert("データ復元に成功いたしやした！");
+        } catch (err) { alert("解析失敗でやんす。"); }
       };
       reader.readAsText(file); event.target.value = '';
     }
@@ -383,7 +382,7 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob);
-      const a = document.createElement('a'); a.href = url; a.download = `decopo_v053_track_${Date.now()}.mid`; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `decopo_v054_track_${Date.now()}.mid`; a.click();
       URL.revokeObjectURL(url);
     }
 
@@ -403,6 +402,24 @@
       gainAttack.gain.setValueAtTime(0.1, now); gainAttack.gain.linearRampToValueAtTime(0.0, now + 0.04);
       oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); oscOvertone.connect(gainOvertone); gainOvertone.connect(audioCtx.destination); oscAttack.connect(gainAttack); gainAttack.connect(audioCtx.destination);
       oscBase.start(now); oscBase.stop(now + 0.45); oscOvertone.start(now); oscOvertone.stop(now + 0.25); oscAttack.start(now); oscAttack.stop(now + 0.05);
+    }
+
+    // ★v0.54新設：ST/GT数値入力用・可変ゲートタイム減衰シンセエンジン
+    function playStgtTone(freq, duration, oscType) {
+      if (!audioCtx) return; const now = audioCtx.currentTime;
+      const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
+      const oscOvertone = audioCtx.createOscillator(); const gainOvertone = audioCtx.createGain(); oscOvertone.type = 'sine'; oscOvertone.frequency.value = freq * 2;
+      
+      gainBase.gain.setValueAtTime(0.25, now);
+      gainBase.gain.linearRampToValueAtTime(0.0, now + duration); // GTの長さに完全同期した決定論的減衰
+      gainOvertone.gain.setValueAtTime(0.08, now);
+      gainOvertone.gain.linearRampToValueAtTime(0.0, now + (duration * 0.6));
+      
+      oscBase.connect(gainBase); gainBase.connect(audioCtx.destination);
+      oscOvertone.connect(gainOvertone); gainOvertone.connect(audioCtx.destination);
+      
+      oscBase.start(now); oscBase.stop(now + duration + 0.05);
+      oscOvertone.start(now); oscOvertone.stop(now + duration + 0.05);
     }
 
     function playDrum(type) {
@@ -427,16 +444,46 @@
       }
     }
 
+    // ★v0.54拡張：選択されている画面モード（ROLLかST/GTか）を自動検知して発音セクターを切り替え
     function togglePlay() {
       if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
       if (audioCtx.state === 'suspended') { audioCtx.resume(); }
       const btn = document.getElementById('btn-play');
-      if (isPlaying) { isPlaying = false; btn.innerText = "▶ PLAY"; btn.classList.remove('playing'); clearInterval(timerId); clearHighlight(); } 
-      else { isPlaying = true; btn.innerText = "■ STOP"; btn.classList.add('playing'); currentStep = 0; runSequencer(); }
+      
+      if (isPlaying) { 
+        // 演奏全面停止（全キャッシュクリア）
+        isPlaying = false; 
+        btn.innerText = "▶ PLAY"; 
+        btn.classList.remove('playing'); 
+        if (timerId) clearInterval(timerId); 
+        if (stgtTimerId) clearTimeout(stgtTimerId);
+        clearHighlight(); 
+      } 
+      else { 
+        isPlaying = true; 
+        btn.innerText = "■ STOP"; 
+        btn.classList.add('playing'); 
+        
+        // アクティブなモードをパースしてコンベア選択
+        const isRollMode = document.getElementById('btn-roll').classList.contains('active');
+        if (isRollMode) {
+          currentStep = 0; 
+          runSequencer(); 
+        } else {
+          stgtIndex = 0;
+          runStgtSequencer(); // ★v0.54新設：ST/GT再生コンベア大開通！
+        }
+      }
     }
 
-    function updateBpm() { if (isPlaying) { clearInterval(timerId); runSequencer(); } }
+    function updateBpm() { 
+      if (isPlaying) { 
+        if (timerId) { clearInterval(timerId); runSequencer(); }
+        // ST/GTはsetTimeoutによる数珠つなぎのため自動追従
+      } 
+    }
     
+    // ROLL画面用シーケンサーランタイム
     function runSequencer() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120; const interval = (60 / bpm / 4) * 1000;
       const stepExecution = () => {
@@ -458,6 +505,43 @@
       stepExecution(); timerId = setInterval(stepExecution, interval);
     }
 
+    // ★v0.54新設：ST/GT数値リスト専用・1行ずつ数珠つなぎ独立発音エンジン
+    function runStgtSequencer() {
+      if (stgtData.length === 0) { togglePlay(); return; }
+
+      const stepExecution = () => {
+        if (!isPlaying) return;
+
+        // 再生位置のリアルタイム・ハイライト記帳
+        renderStgtTable();
+
+        const row = stgtData[stgtIndex];
+        const bpm = Number(document.getElementById('bpm-val').value) || 120;
+        
+        // 64分音符1個分（STの最小単位1）あたりの時間（秒数）を計算
+        const unitTime = (60 / bpm) / 16; 
+
+        // 発音セクターのトリガー
+        if (row.note && row.note !== "REST") {
+          const freq = noteToFreq(row.note);
+          const duration = row.gt * unitTime; // GTに準拠した長さ
+          // 現在選択されているトラックの音色でビキビキ鳴らす！
+          playStgtTone(freq, duration, TRACKS[currentTrackIdx].osc);
+        }
+
+        // 次の行へコンベアを進めるためのウエイト時間（ミリ秒）
+        const nextDelay = row.st * unitTime * 1000;
+        
+        // ポインタをインクリメント（末尾に達したらアタマにループ）
+        stgtIndex = (stgtIndex + 1) % stgtData.length;
+
+        // タイマーバッチを予約
+        stgtTimerId = setTimeout(stepExecution, nextDelay);
+      };
+
+      stepExecution();
+    }
+
     function clearHighlight() {
       for (let i = 0; i < totalSteps; i++) { const hc = document.getElementById(`header-step-${i}`); if (hc) hc.classList.remove('active-step'); }
       const isDrum = TRACKS[currentTrackIdx].type === "drum";
@@ -466,27 +550,43 @@
       } else {
         DRUM_TYPES.forEach(type => { for (let i = 0; i < totalSteps; i++) { const cell = document.getElementById(`cell-${type}-${i}`); if (cell) cell.classList.remove('active-column'); } });
       }
+      // ST/GT画面がアクティブならハイライトを強制再描画してクリア
+      if(document.getElementById('view-stgt').style.display === 'block') renderStgtTable();
     }
 
+    // ★v0.54拡張：現在再生中の行を眩い「緑色」に染め上げる超直感ハイライトUIパッチ
     function renderStgtTable() {
       const container = document.getElementById('stgt-rows-content');
-      container.innerHTML = stgtData.map((row, i) => `
-        <div class="stgt-row" onclick="openEdit(${i})" style="background: ${currentEditIdx === i ? '#0d1a2e' : 'transparent'};">
-          <div style="color: #333; font-size: 9px;">${i + 1}</div>
-          <div style="color: ${BLACK_NOTES.includes(row.note.replace(/\d/,"")) ? '#ff6b35' : '#00d4ff'}; font-size: 12px; font-weight: bold;">${row.note}</div>
-          <div style="color: #e0e0e0; font-size: 11px;">${row.st}${ST_LABELS[row.st] ? `(${ST_LABELS[row.st]})` : ''}</div>
-          <div style="color: #aaa; font-size: 11px;">${row.gt}</div>
-          <div style="color: #aaa; font-size: 11px;">${row.vel}</div>
-          <div onclick="event.stopPropagation(); insertAfter(${i});" style="color: #00d4ff66; font-size: 16px; text-align: center;">+</div>
-          <div onclick="event.stopPropagation(); deleteRow(${i});" style="color: #ff335566; font-size: 12px; text-align: center;">✕</div>
-        </div>
-      `).join('');
+      const isStgtMode = document.getElementById('btn-stgt').classList.contains('active');
+      
+      container.innerHTML = stgtData.map((row, i) => {
+        // 次に実行されるポインタの手前の行＝いま鳴っている現在行を逆算
+        const isCurrent = isPlaying && isStgtMode && (
+          stgtIndex === (i + 1) % stgtData.length || (stgtIndex === 0 && i === stgtData.length - 1)
+        );
+
+        let bg = isCurrent ? '#00ff8822' : (currentEditIdx === i ? '#0d1a2e' : 'transparent');
+        let color = isCurrent ? '#00ff88' : '#e0e0e0';
+        let weight = isCurrent ? 'bold' : 'normal';
+        let border = isCurrent ? '1px solid #00ff8844' : '1px solid #111';
+
+        return `
+          <div class="stgt-row" onclick="openEdit(${i})" style="background: ${bg}; color: ${color}; font-weight: ${weight}; border-bottom: ${border};">
+            <div style="color: ${isCurrent ? '#00ff88' : '#333'}; font-size: 9px;">${i + 1}</div>
+            <div style="color: ${isCurrent ? '#00ff88' : (BLACK_NOTES.includes(row.note.replace(/\d/,"")) ? '#ff6b35' : '#00d4ff')}; font-size: 12px; font-weight: bold;">${row.note}</div>
+            <div style="font-size: 11px;">${row.st}${ST_LABELS[row.st] ? `(${ST_LABELS[row.st]})` : ''}</div>
+            <div style="font-size: 11px; opacity: 0.7;">${row.gt}</div>
+            <div style="font-size: 11px; opacity: 0.7;">${row.vel}</div>
+            <div onclick="event.stopPropagation(); insertAfter(${i});" style="color: #00d4ff66; font-size: 16px; text-align: center;">+</div>
+            <div onclick="event.stopPropagation(); deleteRow(${i});" style="color: #ff335566; font-size: 12px; text-align: center;">✕</div>
+          </div>
+        `;
+      }).join('');
     }
     
     function buildModalSelect() { document.getElementById('modal-note').innerHTML = ALL_NOTES.map(n => `<option value="${n}">${n}</option>`).join(''); }
     function buildModalStOptions() { document.getElementById('st-options-box').innerHTML = ST_OPTIONS.map(v => `<button id="st-opt-${v}" class="st-btn" onclick="setFormSt(${v})">${v}</button>`).join(''); }
     
-    // ★v0.53拡張：テンキー入力とボタン選択を同期させる双方向STインフラ
     function setFormSt(v) { 
       currentForm.st = v; 
       document.getElementById('modal-st').value = v;
@@ -496,16 +596,13 @@
     }
     
     function syncFormSt(val) {
-      const v = Number(val);
-      currentForm.st = v;
-      updateModalUi();
+      const v = Number(val); currentForm.st = v; updateModalUi();
     }
 
     function updateModalUi() { 
       document.getElementById('modal-st-label').innerText = `ST: ${currentForm.st} ${ST_LABELS[currentForm.st] ? `(${ST_LABELS[currentForm.st]})` : ''}`; 
       ST_OPTIONS.forEach(v => { 
-        const optBtn = document.getElementById(`st-opt-${v}`);
-        if(optBtn) optBtn.classList.toggle('active', currentForm.st === v); 
+        const optBtn = document.getElementById(`st-opt-${v}`); if(optBtn) optBtn.classList.toggle('active', currentForm.st === v); 
       }); 
     }
 
@@ -536,10 +633,8 @@
     function deleteRow(idx) { stgtData.splice(idx, 1); renderStgtTable(); }
     function insertAfter(idx) { stgtData.splice(idx + 1, 0, { note: "C4", st: 16, gt: 12, vel: 100 }); openEdit(idx + 1); }
 
-    // 無限拡張イベントリスナー
     document.getElementById('view-roll').addEventListener('scroll', checkAndAppendBar);
 
-    // インフラ初期大開通
     buildTrackBar(); buildPianoRoll(); buildModalSelect(); buildModalStOptions();
   </script>
 </body>
