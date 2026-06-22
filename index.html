@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.52 (Infinite Scroll Edition)</title>
+  <title>DEC●PO v0.53 (Landscape Numeric Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #0a0a14; color: #e0e0e0; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: linear-gradient(90deg, #0a0a14 0%, #0d1a2e 50%, #0a0a14 100%); border-bottom: 1px solid #00d4ff33; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -38,16 +38,31 @@
     .stgt-header { display: grid; grid-template-columns: 24px 60px 110px 50px 50px 40px 40px; border-bottom: 1px solid #00d4ff22; padding: 6px 8px; font-size: 10px; color: #555; gap: 4px; }
     .stgt-row { display: grid; grid-template-columns: 24px 60px 110px 50px 50px 40px 40px; align-items: center; border-bottom: 1px solid #111; padding: 6px 8px; gap: 4px; }
     
-    .modal { position: fixed; bottom: 0; left: 0; right: 0; background: #0d1a2e; border-top: 1px solid #00d4ff66; padding: 10px 12px 24px; z-index: 200; display: none; }
+    /* v0.53最適化：縦画面時のエディタモーダル */
+    .modal { position: fixed; bottom: 0; left: 0; right: 0; background: #0d1a2e; border-top: 1px solid #00d4ff66; padding: 10px 12px 24px; z-index: 200; display: none; box-shadow: 0 -4px 20px #000000aa; }
     .st-box { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
     .st-btn { background: #0a0a14; border: 1px solid #333; color: #aaa; padding: 4px 5px; font-size: 9px; cursor: pointer; }
     .st-btn.active { background: #00d4ff; color: #0a0a14; border-color: #00d4ff; }
-    .ok-btn { background: #00d4ff; border: 1px solid #00d4ff; color: #0a0a14; padding: 4px 12px; font-size: 11px; font-weight: bold; cursor: pointer; }
+    .ok-btn { background: #00ff88; border: 1px solid #00ff88; color: #0a0a14; padding: 4px 14px; font-size: 11px; font-weight: bold; cursor: pointer; }
+    .modal-label { color: #555; font-size: 9px; display: block; margin-bottom: 2px; text-transform: uppercase; }
+
+    /* ★v0.53新設：iPhone SEの横画面（Landscape）特化型インフラUIレイアウト */
+    @media (orientation: landscape) {
+      .modal {
+        top: 0; bottom: 0; left: auto; right: 0; width: 220px;
+        border-top: none; border-left: 1px solid #00d4ff66;
+        padding: 8px 10px; height: 100vh; box-sizing: border-box;
+        overflow-y: auto;
+      }
+      .modal-main-row { flex-direction: column !important; align-items: stretch !important; gap: 6px !important; }
+      .modal-input-group { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+      .st-box { display: none !important; /* 横画面時はテンキー入力に特化するためプリセットボタンを損切り */ }
+      .stgt-container { padding-bottom: 40px; }
+    }
   </style>
 </head>
 <body>
 
-  <!-- Header -->
   <div class="header">
     <span class="logo">DEC●PO</span>
     <button id="btn-roll" class="mode-btn active" onclick="switchMode('roll')">ROLL</button>
@@ -57,7 +72,6 @@
     <button id="btn-play" class="play-btn" onclick="togglePlay()">▶ PLAY</button>
   </div>
 
-  <!-- FILE Control Bar -->
   <div class="file-bar">
     <button class="mode-btn" style="border-color: #00ff88; color: #00ff88; padding: 2px 4px; font-size: 10px;" onclick="saveToFile()">💾 JSON</button>
     <button class="mode-btn" style="border-color: #00d4ff; color: #00d4ff; padding: 2px 4px; font-size: 10px;" onclick="exportMidiFile()">🎹 MIDI</button>
@@ -65,16 +79,13 @@
     <input type="file" id="file-loader" accept=".json" style="display: none;" onchange="loadFile(event)">
   </div>
 
-  <!-- トラック選択コンベアバー -->
   <div class="track-bar" id="track-bar-content"></div>
 
-  <!-- Piano Roll View -->
   <div id="view-roll" class="roll-container">
     <div class="step-header" id="step-header-content"></div>
     <div id="grid-content" style="overflow-y: auto; max-height: calc(100vh - 195px); width: max-content;"></div>
   </div>
 
-  <!-- ST/GT View -->
   <div id="view-stgt" class="stgt-container">
     <div class="stgt-table">
       <div class="stgt-header">
@@ -87,17 +98,38 @@
     </div>
   </div>
 
-  <!-- Editor Modal -->
   <div id="edit-modal" class="modal">
     <div style="display: flex; flex-direction: column; gap: 8px;">
-      <div style="display: flex; gap: 6px; justify-content: space-between; align-items: center;">
-        <select id="modal-note" style="background: #0a0a14; border: 1px solid #00d4ff44; color: #00d4ff; padding: 4px; font-size: 12px;"></select>
-        <input type="number" id="modal-gt" class="bpm-input">
-        <input type="number" id="modal-vel" class="bpm-input">
-        <button class="ok-btn" onclick="commitEdit()">OK</button>
-        <button style="background:none; border:none; color:#666; font-size:16px;" onclick="closeEdit()">✕</button>
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #00d4ff22; padding-bottom: 4px;">
+        <span style="color: #00d4ff; font-size: 11px; font-weight: bold;">NOTE EDITOR</span>
+        <button style="background:none; border:none; color:#666; font-size:16px; cursor:pointer;" onclick="closeEdit()">✕</button>
       </div>
-      <div>
+      
+      <div class="modal-main-row" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+        <div class="modal-input-group">
+          <span class="modal-label">NOTE</span>
+          <select id="modal-note" style="background: #0a0a14; border: 1px solid #00d4ff44; color: #00d4ff; padding: 4px; font-size: 12px; width: 54px;"></select>
+        </div>
+        
+        <div class="modal-input-group">
+          <span class="modal-label">ST</span>
+          <input type="number" id="modal-st" class="bpm-input" inputmode="numeric" pattern="[0-9]*" oninput="syncFormSt(this.value)">
+        </div>
+
+        <div class="modal-input-group">
+          <span class="modal-label">GT</span>
+          <input type="number" id="modal-gt" class="bpm-input" inputmode="numeric" pattern="[0-9]*">
+        </div>
+
+        <div class="modal-input-group">
+          <span class="modal-label">VEL</span>
+          <input type="number" id="modal-vel" class="bpm-input" inputmode="numeric" pattern="[0-9]*">
+        </div>
+
+        <button class="ok-btn" onclick="commitEdit()" style="margin-left: auto;">OK</button>
+      </div>
+
+      <div id="vertical-st-box">
         <div id="modal-st-label" style="color: #555; font-size: 9px; margin-bottom: 2px;">ST: 16</div>
         <div class="st-box" id="st-options-box"></div>
       </div>
@@ -112,7 +144,7 @@
     const ST_OPTIONS = [1,2,3,4,6,8,12,16,24,32,48,96];
     const ST_LABELS = { 1:"64分", 2:"32分", 3:"付点32", 4:"16分", 6:"付点16", 8:"8分", 12:"付点8", 16:"4分", 24:"付点4", 32:"2分", 48:"全音符", 96:"全×2" };
 
-    // v0.52 ファミコン5トラック・インフラ定義
+    // v0.53 ファミコン5トラック・インフラ定義
     const TRACKS = [
       { name: "TK1 矩形1", type: "synth", osc: "square" },
       { name: "TK2 矩形2", type: "synth", osc: "square" },
@@ -123,10 +155,10 @@
     const DRUM_TYPES = ["OH", "CH", "SD", "BD"];
     let currentTrackIdx = 0;
 
-    // ★v0.52拡張：初期状態は余裕を持たせて32ステップ（2小節）からスタート
+    // v0.52 継承：初期状態は32ステップ（2小節）自動拡張バッファ
     let totalSteps = 32; 
 
-    // トラック個別の可変配列メモリ初期化
+    // トラック個別メモリ
     let synthTracksData = Array(4).fill(null).map(() => Object.fromEntries(ALL_NOTES.map(n => [n, Array(totalSteps).fill(false)])));
     let drumTrackData = Object.fromEntries(DRUM_TYPES.map(d => [d, Array(totalSteps).fill(false)]));
 
@@ -162,35 +194,23 @@
       if(mode === 'stgt') renderStgtTable();
     }
 
-    // ★v0.52新設：右スクロール時に自動で1小節（16ステップ）ずつ拡張するバックエンドシステム
+    // v0.52 継承：オート・バー・アペンド（無限右スクロール）
     function checkAndAppendBar(e) {
       const el = e.target;
-      // スクロールが右端から50px以内に接近したかを監査
       if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 50) {
         const prevScrollLeft = el.scrollLeft;
-
-        // 全通常トラックのケツに1小節（16ステップ分）の虚無をデポジット
         for (let t = 0; t < 4; t++) {
-          ALL_NOTES.forEach(note => {
-            synthTracksData[t][note].push(...Array(16).fill(false));
-          });
+          ALL_NOTES.forEach(note => { synthTracksData[t][note].push(...Array(16).fill(false)); });
         }
-        // ドラムトラックも同様に同期拡張
-        DRUM_TYPES.forEach(type => {
-          drumTrackData[type].push(...Array(16).fill(false));
-        });
-
+        DRUM_TYPES.forEach(type => { drumTrackData[type].push(...Array(16).fill(false)); });
         totalSteps += 16;
         buildPianoRoll();
-        
-        // 再レンダリングによる画面のガタつき（スクロール位置の初期化）をヘッジ
         el.scrollLeft = prevScrollLeft;
       }
     }
 
     function buildPianoRoll() {
       const header = document.getElementById('step-header-content');
-      // 小節の頭（1, 17, 33...）と拍の頭（5, 9, 13...）でグリッド境界線を最適化
       header.innerHTML = Array(totalSteps).fill(0).map((_, i) => {
         const isBarStart = i % 16 === 0;
         const isBeatStart = i % 4 === 0;
@@ -219,9 +239,7 @@
                   shadow = `0 0 8px ${isBlack ? '#ff6b3588' : '#00d4ff88'}`;
                 }
                 let cellBorderLeft = step % 16 === 0 ? '1px solid #00ff8844' : (step % 4 === 0 ? '1px solid #00d4ff11' : '1px solid #111');
-                return `
-                  <div class="cell" id="cell-${note}-${step}" onclick="toggleCell('${note}', ${step})" style="background: ${bg}; box-shadow: ${shadow}; border-left: ${cellBorderLeft};"></div>
-                `;
+                return `<div class="cell" id="cell-${note}-${step}" onclick="toggleCell('${note}', ${step})" style="background: ${bg}; box-shadow: ${shadow}; border-left: ${cellBorderLeft};"></div>`;
               }).join('')}
             </div>
           `;
@@ -240,9 +258,7 @@
                   shadow = `0 0 8px #00ff8888`;
                 }
                 let cellBorderLeft = step % 16 === 0 ? '1px solid #00ff8844' : (step % 4 === 0 ? '1px solid #00ff8811' : '1px solid #111');
-                return `
-                  <div class="cell" id="cell-${type}-${step}" onclick="toggleCell('${type}', ${step})" style="background: ${bg}; box-shadow: ${shadow}; height:32px; border-left: ${cellBorderLeft};"></div>
-                `;
+                return `<div class="cell" id="cell-${type}-${step}" onclick="toggleCell('${type}', ${step})" style="background: ${bg}; box-shadow: ${shadow}; height:32px; border-left: ${cellBorderLeft};"></div>`;
               }).join('')}
             </div>
           `;
@@ -278,17 +294,11 @@
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { 
-        version: "v0.52", 
-        bpm: bpm, 
-        synthTracksData: synthTracksData, 
-        drumTrackData: drumTrackData,
-        stgtData: stgtData 
-      };
+      const songData = { version: "v0.53", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtData: stgtData };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v052_${Date.now()}.json`; a.click();
+      a.href = url; a.download = `decopo_v053_${Date.now()}.json`; a.click();
       URL.revokeObjectURL(url);
     }
 
@@ -301,18 +311,12 @@
         try {
           const songData = JSON.parse(e.target.result);
           if (songData.bpm) { document.getElementById('bpm-val').value = songData.bpm; updateBpm(); }
-          
-          if (songData.gridData && !songData.synthTracksData) {
-            synthTracksData[0] = songData.gridData;
-            totalSteps = songData.gridData["C4"].length;
-          } else if (songData.synthTracksData) {
+          if (songData.synthTracksData) {
             synthTracksData = songData.synthTracksData;
-            // ★v0.52互換パッチ：ロードされたデータ長から小節数を動的に逆算・完全復元
             totalSteps = songData.synthTracksData[0]["C4"].length;
           }
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
           if (songData.stgtData) stgtData = songData.stgtData;
-          
           switchTrack(0);
           alert("拡張小節マルチ編成データを完全に復元いたしやした！");
         } catch (err) { alert("解析に失敗いたしやした。"); }
@@ -322,8 +326,7 @@
 
     function noteToMidi(note) {
       const scale = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-      const match = note.match(/^([A-G]#?)(\d)$/);
-      if (!match) return 60;
+      const match = note.match(/^([A-G]#?)(\d)$/); if (!match) return 60;
       return 12 * (parseInt(match[2], 10) + 1) + scale.indexOf(match[1]);
     }
 
@@ -334,27 +337,16 @@
       return buffer.reverse();
     }
 
-    // ★v0.52拡張：自動拡張された全小節を1クロックもズラさずに一括SMF記帳
     function exportMidiFile() {
-      const header = [
-        0x4D, 0x54, 0x72, 0x6B, // MThdパッチ
-        0x00, 0x00, 0x00, 0x06, 
-        0x00, 0x00,             
-        0x00, 0x01,             
-        0x00, 0x30              
-      ];
-      header[1] = 0x54; header[2] = 0x68; header[3] = 0x64; // "MThd"強制再校正
-
-      let midiEvents = [];
-      const stepDuration = 12; 
+      const header = [0x4D, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x30];
+      let midiEvents = []; const stepDuration = 12; 
 
       for (let t = 0; t < 4; t++) {
         ALL_NOTES.forEach(noteName => {
           const midiNum = noteToMidi(noteName);
           for (let step = 0; step < totalSteps; step++) {
             if (synthTracksData[t][noteName] && synthTracksData[t][noteName][step]) {
-              const onTime = step * stepDuration;
-              const offTime = onTime + 11;
+              const onTime = step * stepDuration; const offTime = onTime + 11;
               midiEvents.push({ time: onTime, type: (0x90 + t), note: midiNum, vel: 90 }); 
               midiEvents.push({ time: offTime, type: (0x80 + t), note: midiNum, vel: 0 });  
             }
@@ -367,8 +359,7 @@
         const midiNum = drumMidiMap[type];
         for (let step = 0; step < totalSteps; step++) {
           if (drumTrackData[type] && drumTrackData[type][step]) {
-            const onTime = step * stepDuration;
-            const offTime = onTime + 11;
+            const onTime = step * stepDuration; const offTime = onTime + 11;
             midiEvents.push({ time: onTime, type: 0x99, note: midiNum, vel: 100 }); 
             midiEvents.push({ time: offTime, type: 0x89, note: midiNum, vel: 0 });   
           }
@@ -376,37 +367,23 @@
       });
 
       midiEvents.sort((a, b) => (a.time !== b.time) ? a.time - b.time : a.type - b.type);
-
-      let trackData = [];
-      let lastTime = 0;
+      let trackData = []; let lastTime = 0;
 
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
       const microsecondsPerBeat = Math.round(60000000 / bpm);
-      trackData.push(0x00, 0xFF, 0x51, 0x03, 
-        (microsecondsPerBeat >> 16) & 0xFF, 
-        (microsecondsPerBeat >> 8) & 0xFF, 
-        microsecondsPerBeat & 0xFF
-      );
+      trackData.push(0x00, 0xFF, 0x51, 0x03, (microsecondsPerBeat >> 16) & 0xFF, (microsecondsPerBeat >> 8) & 0xFF, microsecondsPerBeat & 0xFF);
 
       midiEvents.forEach(ev => {
-        let delta = ev.time - lastTime;
-        lastTime = ev.time;
-        trackData.push(...toVLQ(delta)); 
-        trackData.push(ev.type, ev.note, ev.vel);
+        let delta = ev.time - lastTime; lastTime = ev.time;
+        trackData.push(...toVLQ(delta)); trackData.push(ev.type, ev.note, ev.vel);
       });
-
       trackData.push(0x00, 0xFF, 0x2F, 0x00); 
 
       const trkLen = trackData.length;
-      const trkHeader = [
-        0x4D, 0x54, 0x72, 0x6B, 
-        (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF
-      ];
-
+      const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v052_track_${Date.now()}.mid`; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `decopo_v053_track_${Date.now()}.mid`; a.click();
       URL.revokeObjectURL(url);
     }
 
@@ -421,50 +398,31 @@
       const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
       const oscOvertone = audioCtx.createOscillator(); const gainOvertone = audioCtx.createGain(); oscOvertone.type = 'sine'; oscOvertone.frequency.value = freq * 2;
       const oscAttack = audioCtx.createOscillator(); const gainAttack = audioCtx.createGain(); oscAttack.type = 'sine'; oscAttack.frequency.value = freq * 3.5;
-      
       gainBase.gain.setValueAtTime(0.22, now); gainBase.gain.linearRampToValueAtTime(0.0, now + 0.42);
       gainOvertone.gain.setValueAtTime(0.08, now); gainOvertone.gain.linearRampToValueAtTime(0.0, now + 0.22);
       gainAttack.gain.setValueAtTime(0.1, now); gainAttack.gain.linearRampToValueAtTime(0.0, now + 0.04);
-      
-      oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); 
-      oscOvertone.connect(gainOvertone); gainOvertone.connect(audioCtx.destination); 
-      oscAttack.connect(gainAttack); gainAttack.connect(audioCtx.destination);
-      
-      oscBase.start(now); oscBase.stop(now + 0.45); 
-      oscOvertone.start(now); oscOvertone.stop(now + 0.25); 
-      oscAttack.start(now); oscAttack.stop(now + 0.05);
+      oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); oscOvertone.connect(gainOvertone); gainOvertone.connect(audioCtx.destination); oscAttack.connect(gainAttack); gainAttack.connect(audioCtx.destination);
+      oscBase.start(now); oscBase.stop(now + 0.45); oscOvertone.start(now); oscOvertone.stop(now + 0.25); oscAttack.start(now); oscAttack.stop(now + 0.05);
     }
 
     function playDrum(type) {
-      if (!audioCtx) return;
-      const now = audioCtx.currentTime;
-
+      if (!audioCtx) return; const now = audioCtx.currentTime;
       if (!noiseBuffer) {
-        const bufferSize = audioCtx.sampleRate * 0.4;
-        noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const data = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
+        const bufferSize = audioCtx.sampleRate * 0.4; noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = noiseBuffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
       }
-
       if (type === "BD") {
-        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-        osc.type = "sine"; osc.frequency.setValueAtTime(140, now); osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.12);
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = "sine"; osc.frequency.setValueAtTime(140, now); osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.12);
         gain.gain.setValueAtTime(0.6, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.14);
         osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + 0.15);
-      } 
-      else if (type === "SD") {
-        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.35, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.18);
+      } else if (type === "SD") {
+        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.35, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.18);
         source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + 0.19);
-      } 
-      else if (type === "CH") {
-        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.22, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.03);
+      } else if (type === "CH") {
+        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.22, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.03);
         source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + 0.04);
-      } 
-      else if (type === "OH") {
-        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.3);
+      } else if (type === "OH") {
+        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.3);
         source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + 0.31);
       }
     }
@@ -479,37 +437,22 @@
 
     function updateBpm() { if (isPlaying) { clearInterval(timerId); runSequencer(); } }
     
-    // ★v0.52拡張：全小節を完全に自動追従してループするシーケンサーランタイム
     function runSequencer() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120; const interval = (60 / bpm / 4) * 1000;
       const stepExecution = () => {
         clearHighlight();
         const headerCell = document.getElementById(`header-step-${currentStep}`); if (headerCell) headerCell.classList.add('active-step');
-        
         for (let t = 0; t < 4; t++) {
-          ALL_NOTES.forEach(note => {
-            if (synthTracksData[t][note] && synthTracksData[t][note][currentStep]) {
-              playTone(noteToFreq(note), TRACKS[t].osc);
-            }
-          });
+          ALL_NOTES.forEach(note => { if (synthTracksData[t][note] && synthTracksData[t][note][currentStep]) { playTone(noteToFreq(note), TRACKS[t].osc); } });
         }
-
-        DRUM_TYPES.forEach(type => {
-          if (drumTrackData[type] && drumTrackData[type][currentStep]) { playDrum(type); }
-        });
+        DRUM_TYPES.forEach(type => { if (drumTrackData[type] && drumTrackData[type][currentStep]) { playDrum(type); } });
 
         const isDrum = TRACKS[currentTrackIdx].type === "drum";
         if (!isDrum) {
-          ALL_NOTES.forEach(note => {
-            const cell = document.getElementById(`cell-${note}-${currentStep}`); if (cell) cell.classList.add('active-column');
-          });
+          ALL_NOTES.forEach(note => { const cell = document.getElementById(`cell-${note}-${currentStep}`); if (cell) cell.classList.add('active-column'); });
         } else {
-          DRUM_TYPES.forEach(type => {
-            const cell = document.getElementById(`cell-${type}-${currentStep}`); if (cell) cell.classList.add('active-column');
-          });
+          DRUM_TYPES.forEach(type => { const cell = document.getElementById(`cell-${type}-${currentStep}`); if (cell) cell.classList.add('active-column'); });
         }
-        
-        // 拡張された全ステップ（totalSteps）を動的に巡回
         currentStep = (currentStep + 1) % totalSteps;
       };
       stepExecution(); timerId = setInterval(stepExecution, interval);
@@ -539,23 +482,65 @@
         </div>
       `).join('');
     }
+    
     function buildModalSelect() { document.getElementById('modal-note').innerHTML = ALL_NOTES.map(n => `<option value="${n}">${n}</option>`).join(''); }
     function buildModalStOptions() { document.getElementById('st-options-box').innerHTML = ST_OPTIONS.map(v => `<button id="st-opt-${v}" class="st-btn" onclick="setFormSt(${v})">${v}</button>`).join(''); }
-    function setFormSt(v) { currentForm.st = v; if (currentForm.gt > v) currentForm.gt = v; document.getElementById('modal-gt').value = currentForm.gt; updateModalUi(); }
-    function updateModalUi() { document.getElementById('modal-st-label').innerText = `ST: ${currentForm.st} ${ST_LABELS[currentForm.st] ? `(${ST_LABELS[currentForm.st]})` : ''}`; ST_OPTIONS.forEach(v => { document.getElementById(`st-opt-${v}`).classList.toggle('active', currentForm.st === v); }); }
-    function openEdit(idx) { currentEditIdx = idx; if (idx === 'new') { currentForm = { note: "C4", st: 16, gt: 12, vel: 100 }; } else { currentForm = { ...stgtData[idx] }; } document.getElementById('modal-note').value = currentForm.note; document.getElementById('modal-gt').value = currentForm.gt; document.getElementById('modal-vel').value = currentForm.vel; updateModalUi(); document.getElementById('edit-modal').style.display = 'block'; if(idx !== 'new') renderStgtTable(); }
-    function commitEdit() { currentForm.note = document.getElementById('modal-note').value; currentForm.gt = Number(document.getElementById('modal-gt').value); currentForm.vel = Number(document.getElementById('modal-vel').value); if (currentEditIdx === 'new') { stgtData.push({ ...currentForm }); } else { stgtData[currentEditIdx] = { ...currentForm }; } closeEdit(); }
+    
+    // ★v0.53拡張：テンキー入力とボタン選択を同期させる双方向STインフラ
+    function setFormSt(v) { 
+      currentForm.st = v; 
+      document.getElementById('modal-st').value = v;
+      if (currentForm.gt > v) currentForm.gt = v; 
+      document.getElementById('modal-gt').value = currentForm.gt; 
+      updateModalUi(); 
+    }
+    
+    function syncFormSt(val) {
+      const v = Number(val);
+      currentForm.st = v;
+      updateModalUi();
+    }
+
+    function updateModalUi() { 
+      document.getElementById('modal-st-label').innerText = `ST: ${currentForm.st} ${ST_LABELS[currentForm.st] ? `(${ST_LABELS[currentForm.st]})` : ''}`; 
+      ST_OPTIONS.forEach(v => { 
+        const optBtn = document.getElementById(`st-opt-${v}`);
+        if(optBtn) optBtn.classList.toggle('active', currentForm.st === v); 
+      }); 
+    }
+
+    function openEdit(idx) { 
+      currentEditIdx = idx; 
+      if (idx === 'new') { currentForm = { note: "C4", st: 16, gt: 12, vel: 100 }; } 
+      else { currentForm = { ...stgtData[idx] }; } 
+      document.getElementById('modal-note').value = currentForm.note; 
+      document.getElementById('modal-st').value = currentForm.st;
+      document.getElementById('modal-gt').value = currentForm.gt; 
+      document.getElementById('modal-vel').value = currentForm.vel; 
+      updateModalUi(); 
+      document.getElementById('edit-modal').style.display = 'block'; 
+      if(idx !== 'new') renderStgtTable(); 
+    }
+
+    function commitEdit() { 
+      currentForm.note = document.getElementById('modal-note').value; 
+      currentForm.st = Number(document.getElementById('modal-st').value);
+      currentForm.gt = Number(document.getElementById('modal-gt').value); 
+      currentForm.vel = Number(document.getElementById('modal-vel').value); 
+      if (currentEditIdx === 'new') { stgtData.push({ ...currentForm }); } 
+      else { stgtData[currentEditIdx] = { ...currentForm }; } 
+      closeEdit(); 
+    }
+
+    function closeEdit() { document.getElementById('edit-modal').style.display = 'none'; renderStgtTable(); }
     function deleteRow(idx) { stgtData.splice(idx, 1); renderStgtTable(); }
     function insertAfter(idx) { stgtData.splice(idx + 1, 0, { note: "C4", st: 16, gt: 12, vel: 100 }); openEdit(idx + 1); }
 
-    // ★v0.52新設：無限拡張イベントリスナーをコンベアにパイルダーオン
+    // 無限拡張イベントリスナー
     document.getElementById('view-roll').addEventListener('scroll', checkAndAppendBar);
 
     // インフラ初期大開通
-    buildTrackBar();
-    buildPianoRoll(); 
-    buildModalSelect(); 
-    buildModalStOptions();
+    buildTrackBar(); buildPianoRoll(); buildModalSelect(); buildModalStOptions();
   </script>
 </body>
 </html>
