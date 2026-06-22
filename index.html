@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.56 (MIDI Polyphonic Edition)</title>
+  <title>DEC●PO v0.56.1 (BugFix Edition)</title>
   <style>
-    /* ★v0.56仕様：PC-9801本家リスペクトの純然たる漆黒＆シアンパレット */
     body { margin: 0; padding: 0; background: #000000; color: #00e5ff; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: #000000; border-bottom: 2px solid #00e5ff; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
     .logo { color: #ffea00; font-size: 16px; font-weight: bold; letter-spacing: 2px; }
@@ -14,45 +13,32 @@
     .play-btn { background: transparent; border: 1px solid #ffea00; color: #ffea00; padding: 4px 10px; cursor: pointer; font-size: 11px; font-weight: bold; margin-left: auto; }
     .play-btn.playing { background: #ffea00; color: #000000; }
     .bpm-input { background: #000000; border: 1px solid #00e5ff; color: #00e5ff; width: 42px; padding: 4px; text-align: center; font-size: 12px; }
-    
-    /* FILEコントロールバー */
     .file-bar { background: #000000; border-bottom: 1px solid #00e5ff44; padding: 4px 12px; display: flex; gap: 6px; font-size: 11px; justify-content: flex-start; }
-    
-    /* ST/GT再生オプションバー */
     .stgt-ctrl-bar { padding: 4px 12px; display: flex; gap: 6px; font-size: 10px; background: #000000; border-bottom: 1px solid #00e5ff22; align-items: center; }
     .stgt-ctrl-bar .mode-btn { padding: 2px 6px; font-size: 10px; border-color: #333; color: #666; }
     .stgt-ctrl-bar .mode-btn.active { border-color: #ffea00; color: #ffea00; background: #ffea0011; }
-
-    /* トラック選択コンベアバー（16ch対応） */
     .track-bar { background: #000000; border-bottom: 1px solid #00e5ff22; padding: 4px 12px; display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .track-btn { background: #000000; border: 1px solid #00e5ff44; color: #00e5ff66; padding: 3px 8px; font-size: 10px; cursor: pointer; font-weight: bold; white-space: nowrap; }
     .track-btn.active { background: #00e5ff22; color: #00e5ff; border-color: #00e5ff; }
     .track-btn.drum-type.active { background: #ffea0022; color: #ffea00; border-color: #ffea00; }
-
     .roll-container { max-width: 100vw; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .step-header { display: flex; padding-left: 68px; border-bottom: 1px solid #00e5ff22; width: max-content; }
     .step-num { width: 28px; min-width: 28px; text-align: center; font-size: 9px; padding: 4px 0; color: #00e5ff66; }
     .step-num.active-step { background: #ffea0033; color: #ffea00 !important; font-weight: bold; }
-    
     .grid-row { display: flex; align-items: center; border-bottom: 1px solid #00e5ff11; }
     .note-label { width: 64px; min-width: 64px; text-align: right; padding-right: 8px; font-size: 10px; border-right: 1px solid #00e5ff22; }
     .cell { width: 28px; min-width: 28px; height: 26px; cursor: pointer; border-left: 1px solid #111; box-sizing: border-box; }
     .cell.active-column { background: #ffea0011 !important; }
-    
     .stgt-container { padding: 0 0 280px 0; max-width: 100vw; overflow-x: auto; -webkit-overflow-scrolling: touch; display: none; }
     .stgt-table { width: 480px; }
     .stgt-header { display: grid; grid-template-columns: 24px 60px 110px 50px 50px 40px 40px; border-bottom: 1px solid #00e5ff44; padding: 6px 8px; font-size: 10px; color: #00e5ff66; gap: 4px; }
     .stgt-row { display: grid; grid-template-columns: 24px 60px 110px 50px 50px 40px 40px; align-items: center; border-bottom: 1px solid #00e5ff11; padding: 6px 8px; gap: 4px; cursor: pointer; }
-    
-    /* 仮想テンキーエディタモーダル */
     .modal { position: fixed; bottom: 0; left: 0; right: 0; background: #000000; border-top: 2px solid #00e5ff; padding: 10px 12px 24px; z-index: 200; display: none; box-shadow: 0 -4px 20px #000000; }
     .st-box { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
     .st-btn { background: #000000; border: 1px solid #00e5ff44; color: #00e5ff66; padding: 4px 5px; font-size: 9px; cursor: pointer; }
     .st-btn.active { background: #00e5ff; color: #000000; border-color: #00e5ff; }
     .ok-btn { background: #ffea00; border: 1px solid #ffea00; color: #000000; padding: 4px 14px; font-size: 11px; font-weight: bold; cursor: pointer; }
     .modal-label { color: #00e5ff66; font-size: 9px; display: block; margin-bottom: 2px; text-transform: uppercase; }
-
-    /* iPhone SE横画面（Landscape）特化レイアウト */
     @media (orientation: landscape) {
       .modal { top: 0; bottom: 0; left: auto; right: 0; width: 220px; border-top: none; border-left: 2px solid #00e5ff; padding: 8px 10px; height: 100vh; box-sizing: border-box; overflow-y: auto; }
       .modal-main-row { flex-direction: column !important; align-items: stretch !important; gap: 6px !important; }
@@ -64,6 +50,7 @@
 </head>
 <body>
 
+  <!-- Header -->
   <div class="header">
     <span class="logo">DEC●PO</span>
     <button id="btn-roll" class="mode-btn active" onclick="switchMode('roll')">ROLL</button>
@@ -73,6 +60,7 @@
     <button id="btn-play" class="play-btn" onclick="togglePlay()">▶ PLAY</button>
   </div>
 
+  <!-- FILE Bar -->
   <div class="file-bar">
     <button class="mode-btn" style="border-color: #ffea00; color: #ffea00; padding: 2px 4px; font-size: 10px;" onclick="saveToFile()">💾 JSON</button>
     <button class="mode-btn" style="border-color: #00e5ff; color: #00e5ff; padding: 2px 4px; font-size: 10px;" onclick="exportMidiFile()">🎹 MIDI</button>
@@ -91,11 +79,13 @@
 
   <div class="track-bar" id="track-bar-content"></div>
 
+  <!-- Piano Roll View -->
   <div id="view-roll" class="roll-container">
     <div class="step-header" id="step-header-content"></div>
     <div id="grid-content" style="overflow-y: auto; max-height: calc(100vh - 195px); width: max-content;"></div>
   </div>
 
+  <!-- ST/GT View -->
   <div id="view-stgt" class="stgt-container">
     <div class="stgt-table">
       <div class="stgt-header">
@@ -108,6 +98,7 @@
     </div>
   </div>
 
+  <!-- Editor Modal -->
   <div id="edit-modal" class="modal">
     <div style="display: flex; flex-direction: column; gap: 8px;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #00e5ff44; padding-bottom: 4px;">
@@ -151,10 +142,9 @@
     const OCTAVES = [5, 4, 3];
     const ALL_NOTES = OCTAVES.flatMap(oct => NOTES.map(n => `${n}${oct}`));
     const BLACK_NOTES = ["C#", "D#", "F#", "G#", "A#"];
-    const ST_OPTIONS = [0,1,2,3,4,6,8,12,16,24,32,48,96]; // ★ST=0をポートフォリオに正式記帳
+    const ST_OPTIONS = [0,1,2,3,4,6,8,12,16,24,32,48,96];
     const ST_LABELS = { 0:"和音(ST0)", 1:"64分", 2:"32分", 3:"付点32", 4:"16分", 6:"付点16", 8:"8分", 12:"付点8", 16:"4分", 24:"付点4", 32:"2分", 48:"全音符", 96:"全×2" };
 
-    // ★v0.56大開通：16チャンネル汎用MIDIトラックインフラ（CH10は固定ドラムセクター）
     const TRACKS = Array(16).fill(null).map((_, i) => {
       let osc = "square";
       if (i === 9) osc = "noise";
@@ -166,7 +156,6 @@
     let currentTrackIdx = 0;
     let totalSteps = 32; 
 
-    // 16ch対応メモリ空間アロケーション
     let synthTracksData = Array(16).fill(null).map(() => Object.fromEntries(ALL_NOTES.map(n => [n, Array(totalSteps).fill(false)])));
     let drumTrackData = Object.fromEntries(DRUM_TYPES.map(d => [d, Array(totalSteps).fill(false)]));
     let stgtTracksData = Array(16).fill(null).map(() => []);
@@ -178,7 +167,6 @@
     let noiseBuffer = null; 
     let isPlaying = false;
     
-    // 再生ポインタ・レジストリ
     let currentStep = 0;   
     let timerId = null;    
     
@@ -187,7 +175,7 @@
     let stgtIndices = Array(16).fill(0);
     let stgtTimerIds = Array(16).fill(null);
     let stgtAccumSt = Array(16).fill(0); 
-    let stgtLastPlayedIndex = Array(16).fill(-1); // ★ハイライトトラッキング用
+    let stgtLastPlayedIndex = Array(16).fill(-1);
 
     function buildTrackBar() {
       const bar = document.getElementById('track-bar-content');
@@ -299,10 +287,10 @@
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.56", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
+      const songData = { version: "v0.56.1", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v056_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0561_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
@@ -317,7 +305,7 @@
           if (songData.synthTracksData) { synthTracksData = songData.synthTracksData; totalSteps = songData.synthTracksData[0]["C4"].length; }
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
           if (songData.stgtTracksData) stgtTracksData = songData.stgtTracksData;
-          switchTrack(0); alert("16ch対応・知財データの同期完了でやんす！");
+          switchTrack(0); alert("バグフィックス版台帳の同期完了でやんす！");
         } catch (err) { alert("解析失敗でやんす。"); }
       };
       reader.readAsText(file); event.target.value = '';
@@ -339,7 +327,6 @@
     function exportMidiFile() {
       const header = [0x4D, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x30];
       let midiEvents = []; const stepDuration = 12; 
-
       for (let t = 0; t < 16; t++) {
         if (TRACKS[t].type === "drum") continue;
         ALL_NOTES.forEach(noteName => {
@@ -353,7 +340,6 @@
           }
         });
       }
-
       const drumMidiMap = { "BD": 36, "SD": 38, "CH": 42, "OH": 46 };
       DRUM_TYPES.forEach(type => {
         const midiNum = drumMidiMap[type];
@@ -365,30 +351,27 @@
           }
         }
       });
-
       midiEvents.sort((a, b) => (a.time !== b.time) ? a.time - b.time : a.type - b.type);
       let trackData = []; let lastTime = 0;
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
       const microsecondsPerBeat = Math.round(60000000 / bpm);
       trackData.push(0x00, 0xFF, 0x51, 0x03, (microsecondsPerBeat >> 16) & 0xFF, (microsecondsPerBeat >> 8) & 0xFF, microsecondsPerBeat & 0xFF);
-
       midiEvents.forEach(ev => {
         let delta = ev.time - lastTime; lastTime = ev.time;
         trackData.push(...toVLQ(delta)); trackData.push(ev.type, ev.note, ev.vel);
       });
       trackData.push(0x00, 0xFF, 0x2F, 0x00); 
-
       const trkLen = trackData.length;
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v056_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0561_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
     }
 
     function playTone(freq, oscType) {
       if (!audioCtx) return; const now = audioCtx.currentTime;
       const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
-      gainBase.gain.setValueAtTime(0.2, now); gainBase.gain.linearRampToValueAtTime(0.0, now + 0.4);
+      gainBase.gain.setValueAtTime(0.2, now); gainBase.gain.linearRampToValueAtTime(0.001, now + 0.4); // ★iOS安全フェード化
       oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); oscBase.start(now); oscBase.stop(now + 0.45);
     }
 
@@ -396,7 +379,7 @@
       if (!audioCtx) return; const now = audioCtx.currentTime;
       if (oscType === "noise" || trackIdx === 9) { playDrum("SD"); return; }
       const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
-      gainBase.gain.setValueAtTime(0.2, now); gainBase.gain.linearRampToValueAtTime(0.0, now + duration);
+      gainBase.gain.setValueAtTime(0.2, now); gainBase.gain.linearRampToValueAtTime(0.001, now + duration);
       oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); oscBase.start(now); oscBase.stop(now + duration + 0.05);
     }
 
@@ -408,11 +391,17 @@
       }
       if (type === "BD") {
         const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = "sine"; osc.frequency.setValueAtTime(140, now); osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.12);
-        gain.gain.setValueAtTime(0.6, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.14);
+        gain.gain.setValueAtTime(0.6, now); gain.gain.linearRampToValueAtTime(0.001, now + 0.14);
         osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + 0.15);
       } else {
-        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.3, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.15);
-        source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + 0.16);
+        // ★OH, CH, SDのiOS最適化共通アロケータ
+        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain(); 
+        let duration = 0.15;
+        if (type === "CH") { gain.gain.setValueAtTime(0.22, now); duration = 0.03; }
+        else if (type === "OH") { gain.gain.setValueAtTime(0.2, now); duration = 0.3; }
+        else { gain.gain.setValueAtTime(0.3, now); duration = 0.18; }
+        gain.gain.linearRampToValueAtTime(0.001, now + duration);
+        source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + duration + 0.01);
       }
     }
 
@@ -420,7 +409,6 @@
       if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
       if (audioCtx.state === 'suspended') { audioCtx.resume(); }
       const btn = document.getElementById('btn-play');
-      
       if (isPlaying) { 
         isPlaying = false; btn.innerText = "▶ PLAY"; btn.classList.remove('playing'); 
         if (timerId) clearInterval(timerId); 
@@ -441,16 +429,19 @@
 
     function updateBpm() { if (isPlaying) { if (timerId) { clearInterval(timerId); runSequencer(); } } }
     
-    // ROLL用ランタイム
     function runSequencer() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120; const interval = (60 / bpm / 4) * 1000;
       const stepExecution = () => {
         clearHighlight();
         const headerCell = document.getElementById(`header-step-${currentStep}`); if (headerCell) headerCell.classList.add('active-step');
+        
         for (let t = 0; t < 16; t++) {
           if (t === 9) continue;
           ALL_NOTES.forEach(note => { if (synthTracksData[t] && synthTracksData[t][note] && synthTracksData[t][note][currentStep]) { playTone(noteToFreq(note), TRACKS[t].osc); } });
         }
+        // ★v0.56.1大修正：OH, CH, SD, BDの4大アセットすべてをROLL再生エンジンに完全開通！！！
+        if (drumTrackData["OH"] && drumTrackData["OH"][currentStep]) playDrum("OH");
+        if (drumTrackData["CH"] && drumTrackData["CH"][currentStep]) playDrum("CH");
         if (drumTrackData["SD"] && drumTrackData["SD"][currentStep]) playDrum("SD");
         if (drumTrackData["BD"] && drumTrackData["BD"][currentStep]) playDrum("BD");
 
@@ -465,65 +456,26 @@
       stepExecution(); timerId = setInterval(stepExecution, interval);
     }
 
-    // ★v0.56大改造：本家レコポ直系『ST=0和音同時スキャン』自律駆動爆速エンジン
     function runStgtSequencer(t) {
-      const data = stgtTracksData[t];
-      if (data.length === 0) return;
-
+      const data = stgtTracksData[t]; if (data.length === 0) return;
       const stepExecution = () => {
         if (!isPlaying) return;
-
-        const bpm = Number(document.getElementById('bpm-val').value) || 120;
-        const unitTime = (60 / bpm) / 16; 
-
-        let idx = stgtIndices[t];
-        let totalDelay = 0;
-        let loopCount = 0;
-
-        // ST=0が連続する限り、同一時間コンベアとして一括発音処理（無限防衛パッチ付き）
+        const bpm = Number(document.getElementById('bpm-val').value) || 120; const unitTime = (60 / bpm) / 16; 
+        let idx = stgtIndices[t]; let totalDelay = 0; let loopCount = 0;
         while (isPlaying) {
-          if (idx >= data.length || loopCount > 64) { 
-            idx = 0; stgtAccumSt[t] = 0; 
-            if (data.length === 0 || loopCount > 0) break; 
-          }
-          
+          if (idx >= data.length || loopCount > 64) { idx = 0; stgtAccumSt[t] = 0; if (data.length === 0 || loopCount > 0) break; }
           const row = data[idx]; if (!row) break;
-
-          // ハイライトインデックスをリアルタイム記帳
           stgtLastPlayedIndex[t] = idx;
-
-          // 発音セクター（REST時は発音をスキップしてST時間のみ累積）
-          if (row.note && row.note !== "REST") {
-            const freq = noteToFreq(row.note);
-            const duration = row.gt * unitTime;
-            playStgtTone(freq, duration, TRACKS[t].osc, t);
-          }
-
-          totalDelay += row.st * unitTime * 1000;
-          let nextIdx = (idx + 1) % data.length;
-
-          if (stgtRange === 'bar') {
-            stgtAccumSt[t] += row.st;
-            if (stgtAccumSt[t] >= 64 || nextIdx === 0) { nextIdx = 0; stgtAccumSt[t] = 0; }
-          } else {
-            stgtAccumSt[t] = 0;
-          }
-
-          idx = nextIdx;
-          loopCount++;
-
-          // ST > 0 のノートを検知した瞬間、コンベアの同時走査を一時停止（次回のsetTimeoutへトス）
+          if (row.note && row.note !== "REST") { const freq = noteToFreq(row.note); const duration = row.gt * unitTime; playStgtTone(freq, duration, TRACKS[t].osc, t); }
+          totalDelay += row.st * unitTime * 1000; let nextIdx = (idx + 1) % data.length;
+          if (stgtRange === 'bar') { stgtAccumSt[t] += row.st; if (stgtAccumSt[t] >= 64 || nextIdx === 0) { nextIdx = 0; stgtAccumSt[t] = 0; } } else { stgtAccumSt[t] = 0; }
+          idx = nextIdx; loopCount++;
           if (row.st > 0) break;
         }
-
         stgtIndices[t] = idx;
-        
         if (t === currentTrackIdx && document.getElementById('view-stgt').style.display === 'block') { renderStgtTable(); }
-
-        if (totalDelay === 0) totalDelay = 50; // ゼロ遅延フリーズ完全ヘッジ
-        stgtTimerIds[t] = setTimeout(stepExecution, totalDelay);
+        if (totalDelay === 0) totalDelay = 50; stgtTimerIds[t] = setTimeout(stepExecution, totalDelay);
       };
-
       stepExecution();
     }
 
@@ -533,22 +485,11 @@
     }
 
     function renderStgtTable() {
-      const container = document.getElementById('stgt-rows-content');
-      const isStgtMode = document.getElementById('btn-stgt').classList.contains('active');
-      const data = stgtTracksData[currentTrackIdx];
-      
+      const container = document.getElementById('stgt-rows-content'); const isStgtMode = document.getElementById('btn-stgt').classList.contains('active'); const data = stgtTracksData[currentTrackIdx];
       container.innerHTML = data.map((row, i) => {
-        // ★v0.56仕様：現在演奏中のノートを閃光のイエローに染め上げるトラッキングUI
         const isCurrent = isPlaying && isStgtMode && (stgtLastPlayedIndex[currentTrackIdx] === i);
-
-        let bg = isCurrent ? '#ffea0022' : (currentEditIdx === i ? '#222222' : 'transparent');
-        let color = isCurrent ? '#ffea00' : '#00e5ff';
-        let border = isCurrent ? '1px solid #ffea00bb' : '1px solid #111';
-
-        // REST（休符）は視認性を上げるため警告レッドにロンダリング記帳
-        let noteColor = (row.note === "REST") ? "#ff3d00" : (BLACK_NOTES.includes(row.note.replace(/\d/,"")) ? '#ffea00' : '#00e5ff');
-        if (isCurrent) noteColor = '#ffea00';
-
+        let bg = isCurrent ? '#ffea0022' : (currentEditIdx === i ? '#222222' : 'transparent'); let color = isCurrent ? '#ffea00' : '#00e5ff'; let border = isCurrent ? '1px solid #ffea00bb' : '1px solid #111';
+        let noteColor = (row.note === "REST") ? "#ff3d00" : (BLACK_NOTES.includes(row.note.replace(/\d/,"")) ? '#ffea00' : '#00e5ff'); if (isCurrent) noteColor = '#ffea00';
         return `
           <div class="stgt-row" onclick="openEdit(${i})" style="background: ${bg}; color: ${color}; border-bottom: ${border};">
             <div style="color: #333; font-size: 9px;">${i + 1}</div>
@@ -564,54 +505,21 @@
     }
     
     function buildModalSelect() { 
-      // ★v0.56仕様：選択肢の先頭に「REST（休符）」アセットを配置
       let options = `<option value="REST" style="color:#ff3d00;">REST (休符)</option>`;
       options += ALL_NOTES.map(n => `<option value="${n}">${n}</option>`).join('');
-      document.getElementById('modal-note').value = "C4";
       document.getElementById('modal-note').innerHTML = options; 
+      document.getElementById('modal-note').value = "C4";
     }
     function buildModalStOptions() { document.getElementById('st-options-box').innerHTML = ST_OPTIONS.map(v => `<button id="st-opt-${v}" class="st-btn" onclick="setFormSt(${v})">${v}</button>`).join(''); }
-    
-    function setFormSt(v) { 
-      currentForm.st = v; document.getElementById('modal-st').value = v;
-      if (currentForm.gt > v && v > 0) currentForm.gt = v; 
-      document.getElementById('modal-gt').value = currentForm.gt; updateModalUi(); 
-    }
+    function setFormSt(v) { currentForm.st = v; document.getElementById('modal-st').value = v; if (currentForm.gt > v && v > 0) currentForm.gt = v; document.getElementById('modal-gt').value = currentForm.gt; updateModalUi(); }
     function syncFormSt(val) { const v = Number(val); currentForm.st = v; updateModalUi(); }
-
-    function updateModalUi() { 
-      document.getElementById('modal-st-label').innerText = `ST: ${currentForm.st} ${ST_LABELS[currentForm.st] ? `(${ST_LABELS[currentForm.st]})` : ''}`; 
-      ST_OPTIONS.forEach(v => { const optBtn = document.getElementById(`st-opt-${v}`); if(optBtn) optBtn.classList.toggle('active', currentForm.st === v); }); 
-    }
-
-    function openEdit(idx) { 
-      currentEditIdx = idx; const data = stgtTracksData[currentTrackIdx];
-      if (idx === 'new') { currentForm = { note: "C4", st: 16, gt: 12, vel: 100 }; } 
-      else { currentForm = { ...data[idx] }; } 
-      document.getElementById('modal-note').value = currentForm.note; 
-      document.getElementById('modal-st').value = currentForm.st;
-      document.getElementById('modal-gt').value = currentForm.gt; 
-      document.getElementById('modal-vel').value = currentForm.vel; 
-      updateModalUi(); document.getElementById('edit-modal').style.display = 'block'; 
-      if(idx !== 'new') renderStgtTable(); 
-    }
-
-    function commitEdit() { 
-      const data = stgtTracksData[currentTrackIdx];
-      currentForm.note = document.getElementById('modal-note').value; 
-      currentForm.st = Number(document.getElementById('modal-st').value);
-      currentForm.gt = Number(document.getElementById('modal-gt').value); 
-      currentForm.vel = Number(document.getElementById('modal-vel').value); 
-      if (currentEditIdx === 'new') { data.push({ ...currentForm }); } else { data[currentEditIdx] = { ...currentForm }; } 
-      closeEdit(); 
-    }
-
+    function updateModalUi() { document.getElementById('modal-st-label').innerText = `ST: ${currentForm.st} ${ST_LABELS[currentForm.st] ? `(${ST_LABELS[currentForm.st]})` : ''}`; ST_OPTIONS.forEach(v => { const optBtn = document.getElementById(`st-opt-${v}`); if(optBtn) optBtn.classList.toggle('active', currentForm.st === v); }); }
+    function openEdit(idx) { currentEditIdx = idx; const data = stgtTracksData[currentTrackIdx]; if (idx === 'new') { currentForm = { note: "C4", st: 16, gt: 12, vel: 100 }; } else { currentForm = { ...data[idx] }; } document.getElementById('modal-note').value = currentForm.note; document.getElementById('modal-st').value = currentForm.st; document.getElementById('modal-gt').value = currentForm.gt; document.getElementById('modal-vel').value = currentForm.vel; updateModalUi(); document.getElementById('edit-modal').style.display = 'block'; if(idx !== 'new') renderStgtTable(); }
+    function commitEdit() { const data = stgtTracksData[currentTrackIdx]; currentForm.note = document.getElementById('modal-note').value; currentForm.st = Number(document.getElementById('modal-st').value); currentForm.gt = Number(document.getElementById('modal-gt').value); currentForm.vel = Number(document.getElementById('modal-vel').value); if (currentEditIdx === 'new') { data.push({ ...currentForm }); } else { data[currentEditIdx] = { ...currentForm }; } closeEdit(); }
     function closeEdit() { document.getElementById('edit-modal').style.display = 'none'; renderStgtTable(); }
     function deleteRow(idx) { stgtTracksData[currentTrackIdx].splice(idx, 1); renderStgtTable(); }
     function insertAfter(idx) { stgtTracksData[currentTrackIdx].splice(idx + 1, 0, { note: "C4", st: 16, gt: 12, vel: 100 }); openEdit(idx + 1); }
-
     document.getElementById('view-roll').addEventListener('scroll', checkAndAppendBar);
-
     buildTrackBar(); buildPianoRoll(); buildModalSelect(); buildModalStOptions();
   </script>
 </body>
