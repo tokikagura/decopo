@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.56.6 (iOS Audio Fix Edition)</title>
+  <title>DEC●PO v0.57 (General MIDI Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #000000; color: #00e5ff; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: #000000; border-bottom: 2px solid #00e5ff; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -13,7 +13,13 @@
     .play-btn { background: transparent; border: 1px solid #ffea00; color: #ffea00; padding: 4px 10px; cursor: pointer; font-size: 11px; font-weight: bold; margin-left: auto; }
     .play-btn.playing { background: #ffea00; color: #000000; }
     .bpm-input { background: #000000; border: 1px solid #00e5ff; color: #00e5ff; width: 42px; padding: 4px; text-align: center; font-size: 12px; }
-    .file-bar { background: #000000; border-bottom: 1px solid #00e5ff44; padding: 4px 12px; display: flex; gap: 6px; font-size: 11px; justify-content: flex-start; }
+    .file-bar { background: #000000; border-bottom: 1px solid #00e5ff44; padding: 4px 12px; display: flex; gap: 6px; font-size: 11px; justify-content: flex-start; align-items: center; }
+    
+    /* v0.57増設：GM音色インフラ選択バー */
+    .gm-select-container { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #ffea00; margin-left: auto; }
+    .gm-patch-select { background: #000000; border: 1px solid #ffea00; color: #ffea00; font-size: 11px; padding: 2px; max-width: 140px; font-family: monospace; }
+    .gm-patch-select:disabled { border-color: #333; color: #555; }
+
     .stgt-ctrl-bar { padding: 4px 12px; display: flex; gap: 6px; font-size: 10px; background: #000000; border-bottom: 1px solid #00e5ff22; align-items: center; }
     .stgt-ctrl-bar .mode-btn { padding: 2px 6px; font-size: 10px; border-color: #333; color: #666; }
     .stgt-ctrl-bar .mode-btn.active { border-color: #ffea00; color: #ffea00; background: #ffea0011; }
@@ -64,6 +70,11 @@
     <button class="mode-btn" style="border-color: #00e5ff; color: #00e5ff; padding: 2px 4px; font-size: 10px;" onclick="exportMidiFile()">🎹 MIDI</button>
     <button class="mode-btn" style="border-color: #ff3d00; color: #ff3d00; padding: 2px 4px; font-size: 10px;" onclick="triggerLoad()">📂 LOAD</button>
     <input type="file" id="file-loader" accept=".json" style="display: none;" onchange="loadFile(event)">
+    
+    <div class="gm-select-container">
+      <span>GM PATCH:</span>
+      <select id="gm-pc-select" class="gm-patch-select" onchange="updateTrackGmPatch(this.value)"></select>
+    </div>
   </div>
 
   <div id="stgt-playback-options" class="stgt-ctrl-bar" style="display: none;">
@@ -140,13 +151,25 @@
     const ST_OPTIONS = [0,1,2,3,4,6,8,12,16,24,32,48,96];
     const ST_LABELS = { 0:"和音(ST0)", 1:"64分", 2:"32分", 3:"付点32", 4:"16分", 6:"付点16", 8:"8分", 12:"付点8", 16:"4分", 24:"付点4", 32:"2分", 48:"全音符", 96:"全×2" };
 
+    // ★v0.57仕様：GM128音色レジスタ結合トラックインフラ（初期割り当てポートフォリオ）
     const TRACKS = Array(16).fill(null).map((_, i) => {
-      let osc = "square";
-      if (i === 9) osc = "noise";
-      else if (i % 4 === 2) osc = "triangle";
-      else if (i % 4 === 3) osc = "sine";
-      return { name: `CH${i+1}`, type: (i === 9 ? "drum" : "synth"), osc: osc };
+      let pc = 1; // Default: Acoustic Grand Piano
+      if (i === 2) pc = 33;      // CH3: Fingered Bass
+      if (i === 3) pc = 49;      // CH4: String Ensemble 1
+      if (i === 5) pc = 57;      // CH6: Trumpet
+      if (i === 7) pc = 74;      // CH8: Flute
+      if (i === 11) pc = 89;     // CH12: Pad 1 (New Age)
+      return { name: `CH${i+1}`, type: (i === 9 ? "drum" : "synth"), pc: pc };
     });
+    
+    // GM128音色の主要ラベル台帳（容量削減のため厳選テキスト化）
+    const GM_LABELS = {
+      1:"1:Piano", 2:"2:Bright Pno", 5:"5:Tine E.Pno", 17:"17:Drawbar Org", 25:"25:Steel Gtr", 
+      33:"33:Finger Bass", 36:"36:Fretless Bass", 41:"41:Violin", 49:"49:Strings 1", 53:"53:Choir Aahs",
+      57:"57:Trumpet", 61:"61:Brass Sect", 66:"66:Alto Sax", 74:"74:Flute", 81:"81:Square Lead", 
+      82:"82:Saw Lead", 89:"89:Pad 1(Warm)", 105:"105:Sitar"
+    };
+
     const DRUM_TYPES = ["OH", "CH", "SD", "BD"];
     let currentTrackIdx = 0;
     let totalSteps = 32; 
@@ -172,6 +195,23 @@
     let stgtAccumSt = Array(16).fill(0); 
     let stgtLastPlayedIndex = Array(16).fill(-1);
 
+    // ★v0.57仕様：GM Patchセレクトボックスの動的生成
+    function buildGmPatchSelect() {
+      const select = document.getElementById('gm-pc-select');
+      let options = "";
+      for(let i=1; i<=128; i++) {
+        let label = GM_LABELS[i] ? GM_LABELS[i] : `${i}:Patch ${i}`;
+        options += `<option value="${i}">${label}</option>`;
+      }
+      select.innerHTML = options;
+    }
+
+    function updateTrackGmPatch(val) {
+      if (TRACKS[currentTrackIdx].type !== "drum") {
+        TRACKS[currentTrackIdx].pc = Number(val);
+      }
+    }
+
     function buildTrackBar() {
       const bar = document.getElementById('track-bar-content');
       bar.innerHTML = TRACKS.map((t, idx) => {
@@ -184,6 +224,18 @@
       currentTrackIdx = idx;
       buildTrackBar();
       buildPianoRoll();
+      
+      // GMパッチ選択UIの自動同期インフラ
+      const gmSelect = document.getElementById('gm-pc-select');
+      if (TRACKS[idx].type === "drum") {
+        gmSelect.innerHTML = `<option value="10">10:GM Drumset</option>`;
+        gmSelect.disabled = true;
+      } else {
+        buildGmPatchSelect();
+        gmSelect.value = TRACKS[idx].pc;
+        gmSelect.disabled = false;
+      }
+
       if(document.getElementById('view-stgt').style.display === 'block') renderStgtTable();
     }
 
@@ -277,15 +329,38 @@
       } else {
         drumTrackData[key][step] = !drumTrackData[key][step];
       }
+      gridDataToStgt(currentTrackIdx); // ROLLの入力フラグをSTGTリストへ高速自動同期
       buildPianoRoll();
+    }
+
+    // ROLLデータをSTGTデータ配列へ型安全にコンバートする内製インフラ
+    function gridDataToStgt(tIdx) {
+      if (TRACKS[tIdx].type === "drum") return;
+      stgtTracksData[tIdx] = [];
+      let accumSt = 0;
+      for (let step = 0; step < totalSteps; step++) {
+        let activeNotesInStep = [];
+        ALL_NOTES.forEach(note => { if (synthTracksData[tIdx][note] && synthTracksData[tIdx][note][step]) activeNotesInStep.push(note); });
+        
+        if (activeNotesInStep.length > 0) {
+          if (accumSt > 0) { stgtTracksData[tIdx].push({ note: "REST", st: accumSt, gt: 0, vel: 0 }); accumSt = 0; }
+          activeNotesInStep.forEach((nt, nIdx) => {
+            let isLast = nIdx === activeNotesInStep.length - 1;
+            stgtTracksData[tIdx].push({ note: nt, st: isLast ? 4 : 0, gt: 3, vel: 100 }); // 本家互換：ST=0による和音
+          });
+        } else {
+          accumSt += 4;
+        }
+      }
+      if (accumSt > 0) { stgtTracksData[tIdx].push({ note: "REST", st: accumSt, gt: 0, vel: 0 }); }
     }
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.56.6", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
+      const songData = { version: "v0.57", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.pc) };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v0565_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v057_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
@@ -300,7 +375,8 @@
           if (songData.synthTracksData) { synthTracksData = songData.synthTracksData; totalSteps = songData.synthTracksData[0]["C4"].length; }
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
           if (songData.stgtTracksData) stgtTracksData = songData.stgtTracksData;
-          switchTrack(0); alert("大開通パッチデータの同期完了でやんす！");
+          if (songData.tracksConfig) { songData.tracksConfig.forEach((pc, idx) => { if(TRACKS[idx]) TRACKS[idx].pc = pc; }); }
+          switchTrack(0); alert("GM対応・知財データの完全同期完了でやんす！");
         } catch (err) { alert("解析失敗でやんす。"); }
       };
       reader.readAsText(file); event.target.value = '';
@@ -319,9 +395,17 @@
       return buffer.reverse();
     }
 
+    // ★v0.57仕様：GMプログラムチェンジイベント（0xC0）のSMFマッハ記帳インフラ
     function exportMidiFile() {
       const header = [0x4D, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x30];
       let midiEvents = []; const stepDuration = 12; 
+
+      // トラック冒頭（Time 0）へ各chのGM Patchプログラムチェンジイベントを型安全にデポジット
+      for (let t = 0; t < 16; t++) {
+        if (t === 9) continue; // CH10ドラムセクターは除く
+        midiEvents.push({ time: 0, type: (0xC0 + t), note: (TRACKS[t].pc - 1), vel: 0, isPc: true });
+      }
+
       for (let t = 0; t < 16; t++) {
         if (TRACKS[t].type === "drum") continue;
         ALL_NOTES.forEach(noteName => {
@@ -335,6 +419,7 @@
           }
         });
       }
+
       const drumMidiMap = { "BD": 36, "SD": 38, "CH": 42, "OH": 46 };
       DRUM_TYPES.forEach(type => {
         const midiNum = drumMidiMap[type];
@@ -346,42 +431,91 @@
           }
         }
       });
-      midiEvents.sort((a, b) => (a.time !== b.time) ? a.time - b.time : a.type - b.type);
+
+      // タイムスタンプ順、およびプログラムチェンジ最優先ソート
+      midiEvents.sort((a, b) => {
+        if (a.time !== b.time) return a.time - b.time;
+        if (a.isPc && !b.isPc) return -1;
+        if (!a.isPc && b.isPc) return 1;
+        return a.type - b.type;
+      });
+
       let trackData = []; let lastTime = 0;
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
       const microsecondsPerBeat = Math.round(60000000 / bpm);
       trackData.push(0x00, 0xFF, 0x51, 0x03, (microsecondsPerBeat >> 16) & 0xFF, (microsecondsPerBeat >> 8) & 0xFF, microsecondsPerBeat & 0xFF);
+
       midiEvents.forEach(ev => {
         let delta = ev.time - lastTime; lastTime = ev.time;
-        trackData.push(...toVLQ(delta)); trackData.push(ev.type, ev.note, ev.vel);
+        trackData.push(...toVLQ(delta));
+        if (ev.isPc) {
+          trackData.push(ev.type, ev.note); // プログラムチェンジは2バイト構成
+        } else {
+          trackData.push(ev.type, ev.note, ev.vel);
+        }
       });
       trackData.push(0x00, 0xFF, 0x2F, 0x00); 
+
       const trkLen = trackData.length;
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v0565_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v057_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
     }
 
-
     function noteToFreq(note) {
-      const midi = noteToMidi(note);
+      const scale = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+      const match = note.match(/^([A-G]#?)(\d)$/); if (!match) return 440;
+      const midi = 12 * (parseInt(match[2], 10) + 1) + scale.indexOf(match[1]);
       return 440 * Math.pow(2, (midi - 69) / 12);
     }
 
-    function playTone(freq, oscType) {
-      if (!audioCtx) return; const now = audioCtx.currentTime;
-      const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
-      gainBase.gain.setValueAtTime(0.2, now); gainBase.gain.linearRampToValueAtTime(0.001, now + 0.4); 
-      oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); oscBase.start(now); oscBase.stop(now + 0.45);
-    }
+    // ★v0.57仕様：GM Patch連動型・Web Audio算数リアルタイムシンセエンジン
+    function playToneWithGm(note, trackIdx) {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      let freq = noteToFreq(note);
+      const pc = TRACKS[trackIdx].pc;
 
-    function playStgtTone(freq, duration, oscType, trackIdx) {
-      if (!audioCtx) return; const now = audioCtx.currentTime;
-      if (oscType === "noise" || trackIdx === 9) { playDrum("SD"); return; }
-      const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
-      gainBase.gain.setValueAtTime(0.2, now); gainBase.gain.linearRampToValueAtTime(0.001, now + duration);
-      oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); oscBase.start(now); oscBase.stop(now + duration + 0.05);
+      // ベースカテゴリ（PC33〜40）検出時、自動1オクターブダウン(低音大開通ハック)
+      if (pc >= 33 && pc <= 40) { freq = freq / 2; }
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      // GMカテゴリ別の音色波形（オシレータ）クラッキング
+      if (pc >= 1 && pc <= 8) { osc.type = "sine"; }              // Piano: 純粋なサイン波
+      else if (pc >= 25 && pc <= 32) { osc.type = "sawtooth"; }    // Guitar: 鋭いノコギリ波
+      else if (pc >= 33 && pc <= 40) { osc.type = "triangle"; }    // Bass: 重みのある三角波
+      else if (pc >= 41 && pc <= 56) { osc.type = "sawtooth"; }    // Strings: 哀愁のノコギリ波
+      else if (pc >= 57 && pc <= 64) { osc.type = "square"; }      // Brass: 突き抜ける矩形波
+      else { osc.type = "square"; }                               // Lead / Others: ピコピコ矩形波
+      
+      osc.frequency.value = freq;
+
+      // GMカテゴリ別のボリューム包絡線（ADSRエンベロープ）算数ハック
+      if (pc >= 1 && pc <= 8) {
+        // Piano: 最速アタック ＆ 緩やかな減衰フェードアウト
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.45);
+      } else if (pc >= 41 && pc <= 56) {
+        // Strings: アタックをあえて遅らせて「ボワァ〜〜」と立ち上がらせる優雅なインフラ
+        gain.gain.setValueAtTime(0.0, now);
+        gain.gain.linearRampToValueAtTime(0.22, now + 0.12);
+        gain.gain.setValueAtTime(0.22, now + 0.35);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.5);
+      } else if (pc >= 33 && pc <= 40) {
+        // Bass: 音圧重視のサステインホールド型
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0.05, now + 0.4);
+      } else {
+        // Default Synth: 歯切れの良い標準ピコピコ
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.38);
+      }
+
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(now); osc.stop(now + 0.55);
     }
 
     function playDrum(type) {
@@ -405,7 +539,6 @@
       }
     }
 
-    // ★v0.56.5超絶進化：使い回しの呪いを解く、完全同期的コンテキスト・スクラップ＆ビルドエンジン
     function togglePlay() {
       const btn = document.getElementById('btn-play');
       if (isPlaying) { 
@@ -413,31 +546,18 @@
         if (timerId) clearInterval(timerId); 
         stgtTimerIds.forEach(tid => { if(tid) clearTimeout(tid); }); stgtTimerIds.fill(null);
         stgtLastPlayedIndex.fill(-1); clearHighlight(); 
-        
-        // 【必殺：古い音声インフラをメモリごと容赦なく完全損切り】
-        if (audioCtx) {
-          try { audioCtx.close(); } catch(e) {}
-          audioCtx = null;
-        }
+        if (audioCtx) { try { audioCtx.close(); } catch(e) {} audioCtx = null; }
       } 
       else { 
-        // 古い残骸が万が一残っていたら大パージ
-        if (audioCtx) {
-          try { audioCtx.close(); } catch(e) {}
-          audioCtx = null;
-        }
-        
-        // 100%主殿のタップジェスチャー特権を背負った、新規ピチピチのAudioContextをその場でビルド！
+        if (audioCtx) { try { audioCtx.close(); } catch(e) {} audioCtx = null; }
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        noiseBuffer = null; // ドラムバッファも完全同期リセット
+        noiseBuffer = null;
 
-        // 強制アンロック用の無音パルス
+        // iOS強制アンロック用ダミーパルス
         try {
-          const oscUnlock = audioCtx.createOscillator();
-          const gainUnlock = audioCtx.createGain();
+          const oscUnlock = audioCtx.createOscillator(); const gainUnlock = audioCtx.createGain();
           gainUnlock.gain.setValueAtTime(0.0001, audioCtx.currentTime); 
-          oscUnlock.connect(gainUnlock);
-          gainUnlock.connect(audioCtx.destination);
+          oscUnlock.connect(gainUnlock); gainUnlock.connect(audioCtx.destination);
           oscUnlock.start(0); oscUnlock.stop(0.001);
         } catch(e) { }
 
@@ -462,7 +582,7 @@
         
         for (let t = 0; t < 16; t++) {
           if (t === 9) continue;
-          ALL_NOTES.forEach(note => { if (synthTracksData[t] && synthTracksData[t][note] && synthTracksData[t][note][currentStep]) { playTone(noteToFreq(note), TRACKS[t].osc); } });
+          ALL_NOTES.forEach(note => { if (synthTracksData[t] && synthTracksData[t][note] && synthTracksData[t][note][currentStep]) { playToneWithGm(note, t); } });
         }
         if (drumTrackData["OH"] && drumTrackData["OH"][currentStep]) playDrum("OH");
         if (drumTrackData["CH"] && drumTrackData["CH"][currentStep]) playDrum("CH");
@@ -490,7 +610,10 @@
           if (idx >= data.length || loopCount > 64) { idx = 0; stgtAccumSt[t] = 0; if (data.length === 0 || loopCount > 0) break; }
           const row = data[idx]; if (!row) break;
           stgtLastPlayedIndex[t] = idx;
-          if (row.note && row.note !== "REST") { const freq = noteToFreq(row.note); const duration = row.gt * unitTime; playStgtTone(freq, duration, TRACKS[t].osc, t); }
+          if (row.note && row.note !== "REST") { 
+            // STGT再生エンジンへの擬似GM結合
+            if(TRACKS[t].type === "drum") { playDrum(row.note); } else { playToneWithGm(row.note, t); }
+          }
           totalDelay += row.st * unitTime * 1000; let nextIdx = (idx + 1) % data.length;
           if (stgtRange === 'bar') { stgtAccumSt[t] += row.st; if (stgtAccumSt[t] >= 64 || nextIdx === 0) { nextIdx = 0; stgtAccumSt[t] = 0; } } else { stgtAccumSt[t] = 0; }
           idx = nextIdx; loopCount++;
@@ -530,21 +653,28 @@
     
     function buildModalSelect() { 
       let options = `<option value="REST" style="color:#ff3d00;">REST (休符)</option>`;
-      options += ALL_NOTES.map(n => `<option value="${n}">${n}</option>`).join('');
+      if (TRACKS[currentTrackIdx].type === "drum") {
+        options += DRUM_TYPES.map(d => `<option value="${d}">${d}</option>`).join('');
+      } else {
+        options += ALL_NOTES.map(n => `<option value="${n}">${n}</option>`).join('');
+      }
       document.getElementById('modal-note').innerHTML = options; 
-      document.getElementById('modal-note').value = "C4";
+      document.getElementById('modal-note').value = TRACKS[currentTrackIdx].type === "drum" ? "BD" : "C4";
     }
     function buildModalStOptions() { document.getElementById('st-options-box').innerHTML = ST_OPTIONS.map(v => `<button id="st-opt-${v}" class="st-btn" onclick="setFormSt(${v})">${v}</button>`).join(''); }
     function setFormSt(v) { currentForm.st = v; document.getElementById('modal-st').value = v; if (currentForm.gt > v && v > 0) currentForm.gt = v; document.getElementById('modal-gt').value = currentForm.gt; updateModalUi(); }
     function syncFormSt(val) { const v = Number(val); currentForm.st = v; updateModalUi(); }
     function updateModalUi() { document.getElementById('modal-st-label').innerText = `ST: ${currentForm.st} ${ST_LABELS[currentForm.st] ? `(${ST_LABELS[currentForm.st]})` : ''}`; ST_OPTIONS.forEach(v => { const optBtn = document.getElementById(`st-opt-${v}`); if(optBtn) optBtn.classList.toggle('active', currentForm.st === v); }); }
-    function openEdit(idx) { currentEditIdx = idx; const data = stgtTracksData[currentTrackIdx]; if (idx === 'new') { currentForm = { note: "C4", st: 16, gt: 12, vel: 100 }; } else { currentForm = { ...data[idx] }; } document.getElementById('modal-note').value = currentForm.note; document.getElementById('modal-st').value = currentForm.st; document.getElementById('modal-gt').value = currentForm.gt; document.getElementById('modal-vel').value = currentForm.vel; updateModalUi(); document.getElementById('edit-modal').style.display = 'block'; if(idx !== 'new') renderStgtTable(); }
+    function openEdit(idx) { buildModalSelect(); currentEditIdx = idx; const data = stgtTracksData[currentTrackIdx]; if (idx === 'new') { currentForm = { note: (TRACKS[currentTrackIdx].type === "drum" ? "BD" : "C4"), st: 16, gt: 12, vel: 100 }; } else { currentForm = { ...data[idx] }; } document.getElementById('modal-note').value = currentForm.note; document.getElementById('modal-st').value = currentForm.st; document.getElementById('modal-gt').value = currentForm.gt; document.getElementById('modal-vel').value = currentForm.vel; updateModalUi(); document.getElementById('edit-modal').style.display = 'block'; if(idx !== 'new') renderStgtTable(); }
     function commitEdit() { const data = stgtTracksData[currentTrackIdx]; currentForm.note = document.getElementById('modal-note').value; currentForm.st = Number(document.getElementById('modal-st').value); currentForm.gt = Number(document.getElementById('modal-gt').value); currentForm.vel = Number(document.getElementById('modal-vel').value); if (currentEditIdx === 'new') { data.push({ ...currentForm }); } else { data[currentEditIdx] = { ...currentForm }; } closeEdit(); }
     function closeEdit() { document.getElementById('edit-modal').style.display = 'none'; renderStgtTable(); }
     function deleteRow(idx) { stgtTracksData[currentTrackIdx].splice(idx, 1); renderStgtTable(); }
-    function insertAfter(idx) { stgtTracksData[currentTrackIdx].splice(idx + 1, 0, { note: "C4", st: 16, gt: 12, vel: 100 }); openEdit(idx + 1); }
+    function insertAfter(idx) { stgtTracksData[currentTrackIdx].splice(idx + 1, 0, { note: (TRACKS[currentTrackIdx].type === "drum" ? "BD" : "C4"), st: 16, gt: 12, vel: 100 }); openEdit(idx + 1); }
     document.getElementById('view-roll').addEventListener('scroll', checkAndAppendBar);
-    buildTrackBar(); buildPianoRoll(); buildModalSelect(); buildModalStOptions();
+    
+    // 初期ビルド駆動
+    buildGmPatchSelect();
+    switchTrack(0);
   </script>
 </body>
 </html>
