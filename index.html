@@ -3,17 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.62 (True Gate Timeline Edition)</title>
+  <title>DEC●PO v0.64 (Recomposer 2.5 Iconless Engine)</title>
   
   <link rel="manifest" href="manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#000000">
   
+  <!-- ★v0.64究極ハック：画像ファイルを一切必要としない、フロッピーディスク型インライン埋め込みアセット -->
+  <link rel="apple-touch-icon" sizes="180x180" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiI+CiAgPHJlY3Qgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIHJ4PSIzMiIgZmlsbD0iIzEyMTIxMiIvPgogIDxwYXRoIGQ9Ik0gNDQ4IDAgTCA1MTIgNjQgTCA1MTIgNTEyIEwgMCA1MTIgTCAwIDAgWiIgZmlsbD0iIzE4MTgxOCIvPgogIDxwYXRoIGQ9Ik0gNDYwIDAgTCA1MTIgNTIgTCA1MTIgNjAgTCA0NjAgMCBaIiBmaWxsPSIjMGMwYzBjIi8+CiAgPHJlY3QgeD0iNDgiIHk9IjAiIHdpZHRoPSI0MTYiIGhlaWdodD0iMjQwIiByeD0iMTIiIGZpbGw9IiMwMDAwMDAiIHN0cm9rZT0iIzAwZTVmZiIgc3Ryb2tlLXdpZHRoPSI2Ii8+CiAgPHRleHQgeD0iMjU2IiB5PSI3MCIgZm9udC1mYW1pbHk9IidDb3VyaWVyIE5ldycsIG1vbm9zcGFjZSIgZm9udC1zaXplPSI0NiIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiNmZmVhMDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGxldHRlci1zcGFjaW5nPSI0Ij5ERUPil49QTzwvdGV4dD4KICA8dGV4dCB4PSIyNTYiIHk9IjEzMCIgZm9udC1mYW1pbHk9IidDb3VyaWVyIE5ldycsIG1vbm9zcGFjZSIgZm9udC1zaXplPSIyOCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiMwMGU1ZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGxldHRlci1zcGFjaW5nPSIyIj5NSURJIFNFUVVFTkNFUjwvdGV4dD4KICA8dGV4dCB4PSIyNTYiIHk9IjE5MCIgZm9udC1mYW1pbHk9IidDb3VyaWVyIE5ldycsIG1vbm9zcGFjZSIgZm9udC1zaXplPSIyMiIgZmlsbD0iIzAwZmY4OCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgbGV0dGVyLXNwYWNpbmc9IjEiPnYwLjY0IHN5c3RlbSBkaXNrPC90ZXh0PgogIDxyZWN0IHg9IjE0NCIgeT0iMzIwIiB3aWR0aD0iMjI0IiBoZWlnaHQ9IjE5MiIgcng9IjgiIGZpbGw9IiM3NTc1NzUiIHN0cm9rZT0iIzllOWU5ZSIgc3Ryb2tlLXdpZHRoPSI0Ii8+CiAgPHJlY3QgeD0iMTc2IiB5PSIzNTAiIHdpZHRoPSI0OCIgaGVpZ2h0PSIxMzYiIHJ4PSI0IiBmaWxsPSIjMTIxMjEyIi8+CiAgPHJlY3QgeD0iNDMyIiB5PSI0NDgiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0MCIgcng9IjQiIGZpbGw9IiMwMDAwMDAiLz4KICA8cmVjdCB4PSI0MzgiIHk9IjQ1NCIgd2lkdGg9IjM2IiBoZWlnaHQ9IjE2IiByeD0iMiIgZmlsbD0iI2ZmM2QwMCIvPgo8L3N2Zz4=">
+  
   <style>
     body { margin: 0; padding: 0; background: #000000; color: #00e5ff; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
+    
+    /* ★v0.64外観改造：ヘッダーのフォントを往年のレコンポーザ・PC-98MS-DOS風の無骨で硬派なドットテイストへロンダリング！ */
     .header { background: #000000; border-bottom: 2px solid #00e5ff; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
-    .logo { color: #ffea00; font-size: 16px; font-weight: bold; letter-spacing: 2px; }
+    .logo { color: #ffea00; font-size: 16px; font-weight: bold; letter-spacing: 3px; text-shadow: 2px 2px #000000, -1px -1px #00e5ff66; font-family: 'Courier New', monospace; }
+    
     .mode-btn { background: transparent; border: 1px solid #00e5ff; color: #00e5ff; padding: 4px 8px; cursor: pointer; font-size: 11px; font-weight: bold; }
     .mode-btn.active { background: #00e5ff; color: #000000; }
     .play-btn { background: transparent; border: 1px solid #ffea00; color: #ffea00; padding: 4px 10px; cursor: pointer; font-size: 11px; font-weight: bold; margin-left: auto; }
@@ -63,6 +69,7 @@
 </head>
 <body>
 
+  <!-- Header -->
   <div class="header">
     <span class="logo">DEC●PO</span>
     <button id="btn-roll" class="mode-btn active" onclick="switchMode('roll')">ROLL</button>
@@ -72,6 +79,7 @@
     <button id="btn-play" class="play-btn" onclick="togglePlay()">▶ PLAY</button>
   </div>
 
+  <!-- FILE Bar -->
   <div class="file-bar">
     <button class="mode-btn" style="border-color: #ffea00; color: #ffea00; padding: 2px 4px; font-size: 10px;" onclick="saveToFile()">💾 JSON</button>
     <button class="mode-btn" style="border-color: #00e5ff; color: #00e5ff; padding: 2px 4px; font-size: 10px;" onclick="exportMidiFile()">🎹 MIDI</button>
@@ -95,11 +103,13 @@
 
   <div class="track-bar" id="track-bar-content"></div>
 
+  <!-- Piano Roll View -->
   <div id="view-roll" class="roll-container">
     <div class="step-header" id="step-header-content"></div>
     <div id="grid-content" style="overflow-y: auto; max-height: calc(100vh - 195px); width: max-content;"></div>
   </div>
 
+  <!-- ST/GT View -->
   <div id="view-stgt" class="stgt-container">
     <div class="stgt-table">
       <div class="stgt-header">
@@ -112,6 +122,7 @@
     </div>
   </div>
 
+  <!-- Editor Modal -->
   <div id="edit-modal" class="modal">
     <div style="display: flex; flex-direction: column; gap: 8px;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #00e5ff44; padding-bottom: 4px;">
@@ -167,7 +178,7 @@
     const ALL_NOTES = [];
     for (let oct = 5; oct >= 3; oct--) {
       const scaleHighToLow = ["B", "A#", "A", "G#", "G", "F#", "F", "E", "D#", "D", "C#", "C"];
-      scaleHighToLow.forEach(n => ALL_NOTES.push(`${n}${oct}`));
+      scaleHighToLow.forEach(n => ALL_NOTES.push(n + oct));
     }
 
     const TRACKS = Array(16).fill(null).map((_, i) => {
@@ -357,7 +368,7 @@
         ALL_NOTES.forEach(note => { if (synthTracksData[tIdx][note] && synthTracksData[tIdx][note][step]) activeNotesInStep.push(note); });
         
         if (activeNotesInStep.length > 0) {
-          if (accumSt > 0) { stgtTracksData[tIdx].push({ note: "REST", st: accumSt, gt: 0, vel: 0, pc: 0 }); accumSt = 0; }
+          if (accumSt > 0) { stgtTracksData[tIdx].push({ note: "REST", stroke: accumSt, st: accumSt, gt: 0, vel: 0, pc: 0 }); accumSt = 0; }
           activeNotesInStep.forEach((nt, nIdx) => {
             let isLast = nIdx === activeNotesInStep.length - 1;
             stgtTracksData[tIdx].push({ note: nt, st: isLast ? 24 : 0, gt: 18, vel: 100, pc: 0 }); 
@@ -366,7 +377,7 @@
           accumSt += 24;
         }
       }
-      if (accumSt > 0) { stgtTracksData[tIdx].push({ note: "REST", st: accumSt, gt: 0, vel: 0, pc: 0 }); }
+      if (accumSt > 0) { stgtTracksData[tIdx].push({ note: "REST", stroke: accumSt, st: accumSt, gt: 0, vel: 0, pc: 0 }); }
     }
 
     function stgtDataToGrid(tIdx) {
@@ -400,10 +411,10 @@
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.62", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
+      const songData = { version: "v0.64", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v062_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v064_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
@@ -445,18 +456,15 @@
       return buffer.reverse();
     }
 
-    // ★v0.62大開通：一律+23のデブ固定を完全パージ！ ST/GTリストの真のタイムライン（st/gt）を正確に追跡してSMFを編み上げる無敵の出力マクロ！
     function exportMidiFile() {
       const header = [0x4D, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x60]; 
       let midiEvents = []; 
 
-      // 1. 各chの冒頭初期音色の記帳
       for (let t = 0; t < 16; t++) {
         if (t === 9) continue; 
         midiEvents.push({ time: 0, type: (0xC0 + t), note: (TRACKS[t].initPc - 1), vel: 0, isPc: true });
       }
 
-      // 2. 各シンセchのST/GTリストを完全走査、曲中PCおよび「row.gt」を100%ダイレクト転送！
       for (let t = 0; t < 16; t++) {
         if (TRACKS[t].type === "drum") continue; 
         let currentClock = 0;
@@ -468,7 +476,6 @@
             if (row.note && row.note !== "REST") {
               const midiNum = noteToMidi(row.note);
               const velVal = row.vel || 100;
-              // Note On と Note Off の時間軸をデータのゲートタイム(row.gt)通りに寸分の狂いもなく精密アロケーション！
               midiEvents.push({ time: currentClock, type: (0x90 + t), note: midiNum, vel: velVal });
               midiEvents.push({ time: (currentClock + row.gt), type: (0x80 + t), note: midiNum, vel: 0 });
             }
@@ -477,14 +484,13 @@
         }
       }
 
-      // 3. ドラムトラック（CH10）のトリガー出力記帳
       const drumMidiMap = { "BD": 36, "SD": 38, "CH": 42, "OH": 46 };
       DRUM_TYPES.forEach(type => {
         const midiNum = drumMidiMap[type];
         for (let step = 0; step < totalSteps; step++) {
           if (drumTrackData[type] && drumTrackData[type][step]) {
             const onTime = step * 24; 
-            const offTime = onTime + 12; // ドラムはワンショット固定で安全
+            const offTime = onTime + 12; 
             midiEvents.push({ time: onTime, type: 0x99, note: midiNum, vel: 100 }); 
             midiEvents.push({ time: offTime, type: 0x89, note: midiNum, vel: 0 });   
           }
@@ -518,7 +524,7 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v062_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v064_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
     }
 
     function noteToFreq(note) {
@@ -615,7 +621,7 @@
           gainUnlock.gain.setValueAtTime(0.0001, audioCtx.currentTime); 
           oscUnlock.connect(gainUnlock); gainUnlock.connect(audioCtx.destination);
           oscUnlock.start(0); oscUnlock.stop(0.001);
-        } catch(e) { }
+        } catch(e) {}
 
         isPlaying = true; btn.innerText = "■ STOP"; btn.classList.add('playing'); 
         const isRollMode = document.getElementById('btn-roll').classList.contains('active');
