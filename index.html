@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.59 (Program Change Edition)</title>
+  <title>DEC●PO v0.59.1 (Pitch Layer Fix Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #000000; color: #00e5ff; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: #000000; border-bottom: 2px solid #00e5ff; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -37,7 +37,6 @@
     
     .stgt-container { padding: 0 0 280px 0; max-width: 100vw; overflow-x: auto; -webkit-overflow-scrolling: touch; display: none; }
     .stgt-table { width: 480px; }
-    /* v0.59仕様：PC列追加に伴う375px幅最適化グリッド */
     .stgt-header { display: grid; grid-template-columns: 24px 54px 46px 44px 44px 44px 34px 34px; border-bottom: 1px solid #00e5ff44; padding: 6px 8px; font-size: 10px; color: #00e5ff66; gap: 4px; }
     .stgt-row { display: grid; grid-template-columns: 24px 54px 46px 44px 44px 44px 34px 34px; align-items: center; border-bottom: 1px solid #00e5ff11; padding: 6px 8px; gap: 4px; cursor: pointer; }
     
@@ -75,7 +74,6 @@
     <button class="mode-btn" style="border-color: #ff3d00; color: #ff3d00; padding: 2px 4px; font-size: 10px;" onclick="triggerLoad()">📂 LOAD</button>
     <input type="file" id="file-loader" accept=".json" style="display: none;" onchange="loadFile(event)">
     
-    <!-- GM音色選択インフラ -->
     <div class="gm-select-container">
       <span>GM PATCH:</span>
       <select id="gm-pc-select" class="gm-patch-select" onchange="updateTrackGmPatch(this.value)"></select>
@@ -126,7 +124,6 @@
           <select id="modal-note" style="background: #000000; border: 1px solid #00e5ff44; color: #00e5ff; padding: 4px; font-size: 12px; width: 68px;"></select>
         </div>
 
-        <!-- ★v0.59仕様：曲中プログラムチェンジ(PC)エディットインフラ -->
         <div class="modal-input-group">
           <span class="modal-label">PC</span>
           <select id="modal-pc" style="background: #000000; border: 1px solid #00e5ff44; color: #ffea00; padding: 4px; font-size: 11px; width: 65px;"></select>
@@ -158,11 +155,7 @@
   </div>
 
   <script>
-    const NOTES = ["C", "B", "A#", "A", "G#", "G", "F#", "F", "E", "D#", "D", "C#"];
-    const OCTAVES = [5, 4, 3];
-    const ALL_NOTES = OCTAVES.flatMap(oct => NOTES.map(n => `${n}${oct}`));
     const BLACK_NOTES = ["C#", "D#", "F#", "G#", "A#"];
-    
     const ST_OPTIONS = [0, 6, 12, 16, 18, 24, 32, 36, 48, 64, 72, 96, 144, 192, 384];
     const ST_LABELS = { 
       0: "和音(ST0)", 6: "64分音符", 12: "32分音符", 16: "3連16分", 18: "付点32分", 
@@ -170,7 +163,14 @@
       72: "付点8分", 96: "4分音符", 144: "付点4分", 192: "2分音符", 384: "全音符" 
     };
 
-    // ★v0.59仕様：永続初期値(initPc)と動的現在値(pc)をハンドシェイクするトラック構造
+    // ★v0.59.1超絶デバッグ：国際標準MIDI音階に完全準拠した「真・高域物理配列エンジン」
+    // 高い音（B5）から低い音（C3）へ一貫してノート番号順に美しく並ぶよう、ループ構造を完全ロンダリング！
+    const ALL_NOTES = [];
+    for (let oct = 5; oct >= 3; oct--) {
+      const scaleHighToLow = ["B", "A#", "A", "G#", "G", "F#", "F", "E", "D#", "D", "C#", "C"];
+      scaleHighToLow.forEach(n => ALL_NOTES.push(`${n}${oct}`));
+    }
+
     const TRACKS = Array(16).fill(null).map((_, i) => {
       let pc = 1; 
       if (i === 2) pc = 33;      // CH3: Fingered Bass
@@ -249,7 +249,7 @@
         gmSelect.disabled = true;
       } else {
         buildGmPatchSelect();
-        gmSelect.value = TRACKS[idx].initPc; // 初期化ポートフォリオ値をUIに同期
+        gmSelect.value = TRACKS[idx].initPc; 
         gmSelect.disabled = false;
       }
 
@@ -373,10 +373,10 @@
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.59", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
+      const songData = { version: "v0.59.1", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v059_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0591_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
@@ -392,7 +392,7 @@
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
           if (songData.stgtTracksData) stgtTracksData = songData.stgtTracksData;
           if (songData.tracksConfig) { songData.tracksConfig.forEach((pc, idx) => { if(TRACKS[idx]) { TRACKS[idx].initPc = pc; TRACKS[idx].pc = pc; } }); }
-          switchTrack(0); alert("曲中PC対応・知財データの完全同期完了でやんす！");
+          switchTrack(0); alert("ピッチ修正版・知財データの完全同期完了でやんす！");
         } catch (err) { alert("解析失敗でやんす。"); }
       };
       reader.readAsText(file); event.target.value = '';
@@ -411,18 +411,15 @@
       return buffer.reverse();
     }
 
-    // ★v0.59仕様：STGTタイムライン上の曲中PCイベントも絶対時間計算してSMFへマッハ埋め込み
     function exportMidiFile() {
       const header = [0x4D, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x60]; 
       let midiEvents = []; const stepDuration = 24; 
 
-      // 1. 各chの冒頭初期音色の記帳
       for (let t = 0; t < 16; t++) {
         if (t === 9) continue; 
         midiEvents.push({ time: 0, type: (0xC0 + t), note: (TRACKS[t].initPc - 1), vel: 0, isPc: true });
       }
 
-      // 2. STGTリストに存在する「曲中プログラムチェンジ」の絶対時間クロック追跡・抽出
       for (let t = 0; t < 16; t++) {
         if (TRACKS[t].type === "drum") continue;
         let currentClock = 0;
@@ -436,7 +433,6 @@
         }
       }
 
-      // 3. ROLLグリッドからの発音イベント記帳
       for (let t = 0; t < 16; t++) {
         if (TRACKS[t].type === "drum") continue;
         ALL_NOTES.forEach(noteName => {
@@ -490,7 +486,7 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v059_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0591_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
     }
 
     function noteToFreq(note) {
@@ -504,7 +500,7 @@
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
       let freq = noteToFreq(note);
-      const pc = TRACKS[trackIdx].pc; // 動的な現在音色(pc)を参照して発音
+      const pc = TRACKS[trackIdx].pc; 
 
       if (pc >= 33 && pc <= 40) { freq = freq / 2; }
 
@@ -571,7 +567,6 @@
         stgtLastPlayedIndex.fill(-1); clearHighlight(); 
         if (audioCtx) { try { audioCtx.close(); } catch(e) {} audioCtx = null; }
         
-        // 再生停止時、すべてのトラックの可変PCを「初期アロケーション(initPc)」へ安全リセット
         TRACKS.forEach(t => t.pc = t.initPc);
         const gmSelect = document.getElementById('gm-pc-select');
         if (TRACKS[currentTrackIdx].type !== "drum") gmSelect.value = TRACKS[currentTrackIdx].initPc;
@@ -581,7 +576,6 @@
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         noiseBuffer = null;
 
-        // 再生開始時にポートフォリオの初期状態をガチッとロック
         TRACKS.forEach(t => t.pc = t.initPc);
 
         try {
@@ -642,11 +636,10 @@
           const row = data[idx]; if (!row) break;
           stgtLastPlayedIndex[t] = idx;
 
-          // ★v0.59仕様：演奏タイムライン上で曲中PCを検知した瞬間、オシレータの楽器パッチをチャカチャカ自動上書き切り替え！
           if (row.pc && row.pc > 0) {
             TRACKS[t].pc = row.pc;
             if (t === currentTrackIdx) {
-              document.getElementById('gm-pc-select').value = row.pc; // カレントchならUIも超高速リアルタイム同期！
+              document.getElementById('gm-pc-select').value = row.pc; 
             }
           }
 
@@ -708,7 +701,6 @@
       document.getElementById('modal-note').value = TRACKS[currentTrackIdx].type === "drum" ? "BD" : "C4";
     }
 
-    // ★v0.59仕様：エディタモーダル内の曲中PCセレクトボックス自動生成インフラ
     function buildModalPcSelect() {
       const select = document.getElementById('modal-pc');
       let options = `<option value="0">--</option>`;
@@ -742,7 +734,7 @@
         currentForm = { ...data[idx] }; 
       } 
       document.getElementById('modal-note').value = currentForm.note; 
-      document.getElementById('modal-pc').value = currentForm.pc || 0; // モーダルUIにPC値をデポジット
+      document.getElementById('modal-pc').value = currentForm.pc || 0; 
       document.getElementById('modal-st').value = currentForm.st; 
       document.getElementById('modal-gt').value = currentForm.gt; 
       document.getElementById('modal-vel').value = currentForm.vel; 
@@ -753,7 +745,7 @@
     function commitEdit() { 
       const data = stgtTracksData[currentTrackIdx]; 
       currentForm.note = document.getElementById('modal-note').value; 
-      currentForm.pc = Number(document.getElementById('modal-pc').value); // 帳簿へPC変更値を確定コミット
+      currentForm.pc = Number(document.getElementById('modal-pc').value); 
       currentForm.st = Number(document.getElementById('modal-st').value); 
       currentForm.gt = Number(document.getElementById('modal-gt').value); 
       currentForm.vel = Number(document.getElementById('modal-vel').value); 
