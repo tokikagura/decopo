@@ -1,0 +1,18 @@
+{
+  "short_name": "DECOPO",
+  "name": "DEC●PO MIDI Sequencer",
+  "icons": [
+    {
+      "src": "https://tokikagura.github.io/decopo/icon.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "id": "/decopo/",
+  "start_url": "index.html",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "display": "standalone",
+  "orientation": "portrait"
+}
