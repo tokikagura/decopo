@@ -3,20 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.64 (Recomposer 2.5 Iconless Engine)</title>
+  <title>DEC●PO v0.65 (True PNG Standard Edition)</title>
   
+  <!-- ★v0.65仕様：完全スタンドアローンPWA防衛インフラ -->
   <link rel="manifest" href="manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#000000">
   
-  <!-- ★v0.64究極ハック：画像ファイルを一切必要としない、フロッピーディスク型インライン埋め込みアセット -->
-  <link rel="apple-touch-icon" sizes="180x180" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiI+CiAgPHJlY3Qgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIHJ4PSIzMiIgZmlsbD0iIzEyMTIxMiIvPgogIDxwYXRoIGQ9Ik0gNDQ4IDAgTCA1MTIgNjQgTCA1MTIgNTEyIEwgMCA1MTIgTCAwIDAgWiIgZmlsbD0iIzE4MTgxOCIvPgogIDxwYXRoIGQ9Ik0gNDYwIDAgTCA1MTIgNTIgTCA1MTIgNjAgTCA0NjAgMCBaIiBmaWxsPSIjMGMwYzBjIi8+CiAgPHJlY3QgeD0iNDgiIHk9IjAiIHdpZHRoPSI0MTYiIGhlaWdodD0iMjQwIiByeD0iMTIiIGZpbGw9IiMwMDAwMDAiIHN0cm9rZT0iIzAwZTVmZiIgc3Ryb2tlLXdpZHRoPSI2Ii8+CiAgPHRleHQgeD0iMjU2IiB5PSI3MCIgZm9udC1mYW1pbHk9IidDb3VyaWVyIE5ldycsIG1vbm9zcGFjZSIgZm9udC1zaXplPSI0NiIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiNmZmVhMDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGxldHRlci1zcGFjaW5nPSI0Ij5ERUPil49QTzwvdGV4dD4KICA8dGV4dCB4PSIyNTYiIHk9IjEzMCIgZm9udC1mYW1pbHk9IidDb3VyaWVyIE5ldycsIG1vbm9zcGFjZSIgZm9udC1zaXplPSIyOCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiMwMGU1ZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGxldHRlci1zcGFjaW5nPSIyIj5NSURJIFNFUVVFTkNFUjwvdGV4dD4KICA8dGV4dCB4PSIyNTYiIHk9IjE5MCIgZm9udC1mYW1pbHk9IidDb3VyaWVyIE5ldycsIG1vbm9zcGFjZSIgZm9udC1zaXplPSIyMiIgZmlsbD0iIzAwZmY4OCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgbGV0dGVyLXNwYWNpbmc9IjEiPnYwLjY0IHN5c3RlbSBkaXNrPC90ZXh0PgogIDxyZWN0IHg9IjE0NCIgeT0iMzIwIiB3aWR0aD0iMjI0IiBoZWlnaHQ9IjE5MiIgcng9IjgiIGZpbGw9IiM3NTc1NzUiIHN0cm9rZT0iIzllOWU5ZSIgc3Ryb2tlLXdpZHRoPSI0Ii8+CiAgPHJlY3QgeD0iMTc2IiB5PSIzNTAiIHdpZHRoPSI0OCIgaGVpZ2h0PSIxMzYiIHJ4PSI0IiBmaWxsPSIjMTIxMjEyIi8+CiAgPHJlY3QgeD0iNDMyIiB5PSI0NDgiIHdpZHRoPSI0OCIgaGVpZ2h0PSI0MCIgcng9IjQiIGZpbGw9IiMwMDAwMDAiLz4KICA8cmVjdCB4PSI0MzgiIHk9IjQ1NCIgd2lkdGg9IjM2IiBoZWlnaHQ9IjE2IiByeD0iMiIgZmlsbD0iI2ZmM2QwMCIvPgo8L3N2Zz4=">
+  <!-- ★v0.65回帰パッチ：お上の規約通り、インライン呪文を完全損切りして本物の画像ファイルを参照！ -->
+  <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   
   <style>
     body { margin: 0; padding: 0; background: #000000; color: #00e5ff; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
-    
-    /* ★v0.64外観改造：ヘッダーのフォントを往年のレコンポーザ・PC-98MS-DOS風の無骨で硬派なドットテイストへロンダリング！ */
     .header { background: #000000; border-bottom: 2px solid #00e5ff; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
     .logo { color: #ffea00; font-size: 16px; font-weight: bold; letter-spacing: 3px; text-shadow: 2px 2px #000000, -1px -1px #00e5ff66; font-family: 'Courier New', monospace; }
     
@@ -34,7 +33,7 @@
     .stgt-ctrl-bar { padding: 4px 12px; display: flex; gap: 6px; font-size: 10px; background: #000000; border-bottom: 1px solid #00e5ff22; align-items: center; }
     .stgt-ctrl-bar .mode-btn { padding: 2px 6px; font-size: 10px; border-color: #333; color: #666; }
     .stgt-ctrl-bar .mode-btn.active { border-color: #ffea00; color: #ffea00; background: #ffea0011; }
-    .track-bar { background: #000000; border-bottom: 1px solid #00e5ff22; padding: 4px 12px; display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .track-bar { background: #000000; border-bottom: 2px solid #00e5ff22; padding: 4px 12px; display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .track-btn { background: #000000; border: 1px solid #00e5ff44; color: #00e5ff66; padding: 3px 8px; font-size: 10px; cursor: pointer; font-weight: bold; white-space: nowrap; }
     .track-btn.active { background: #00e5ff22; color: #00e5ff; border-color: #00e5ff; }
     .track-btn.drum-type.active { background: #ffea0022; color: #ffea00; border-color: #ffea00; }
@@ -411,10 +410,10 @@
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.64", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
+      const songData = { version: "v0.65", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v064_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v065_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
@@ -524,7 +523,7 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v064_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v062_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
     }
 
     function noteToFreq(note) {
