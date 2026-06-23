@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.59.1 (Pitch Layer Fix Edition)</title>
+  <title>DEC●PO v0.59.2 (Patch Filter Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #000000; color: #00e5ff; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: #000000; border-bottom: 2px solid #00e5ff; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -163,8 +163,6 @@
       72: "付点8分", 96: "4分音符", 144: "付点4分", 192: "2分音符", 384: "全音符" 
     };
 
-    // ★v0.59.1超絶デバッグ：国際標準MIDI音階に完全準拠した「真・高域物理配列エンジン」
-    // 高い音（B5）から低い音（C3）へ一貫してノート番号順に美しく並ぶよう、ループ構造を完全ロンダリング！
     const ALL_NOTES = [];
     for (let oct = 5; oct >= 3; oct--) {
       const scaleHighToLow = ["B", "A#", "A", "G#", "G", "F#", "F", "E", "D#", "D", "C#", "C"];
@@ -181,6 +179,7 @@
       return { name: `CH${i+1}`, type: (i === 9 ? "drum" : "synth"), pc: pc, initPc: pc };
     });
     
+    // ★登録された音色アセットポートフォリオ
     const GM_LABELS = {
       1:"1:Piano", 2:"2:Bright Pno", 5:"5:Tine E.Pno", 17:"17:Drawbar Org", 25:"25:Steel Gtr", 
       33:"33:Finger Bass", 36:"36:Fretless Bass", 41:"41:Violin", 49:"49:Strings 1", 53:"53:Choir Aahs",
@@ -213,12 +212,12 @@
     let stgtAccumSt = Array(16).fill(0); 
     let stgtLastPlayedIndex = Array(16).fill(-1);
 
+    // ★v0.59.2仕様変更：未実装の音色（欠番パッチ）を100%完全非表示化（フィルタリング）
     function buildGmPatchSelect() {
       const select = document.getElementById('gm-pc-select');
       let options = "";
-      for(let i=1; i<=128; i++) {
-        let label = GM_LABELS[i] ? GM_LABELS[i] : `${i}:Patch ${i}`;
-        options += `<option value="${i}">${label}</option>`;
+      for (let i in GM_LABELS) {
+        options += `<option value="${i}">${GM_LABELS[i]}</option>`;
       }
       select.innerHTML = options;
     }
@@ -373,10 +372,10 @@
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.59.1", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
+      const songData = { version: "v0.59.2", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v0591_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0592_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
@@ -392,7 +391,7 @@
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
           if (songData.stgtTracksData) stgtTracksData = songData.stgtTracksData;
           if (songData.tracksConfig) { songData.tracksConfig.forEach((pc, idx) => { if(TRACKS[idx]) { TRACKS[idx].initPc = pc; TRACKS[idx].pc = pc; } }); }
-          switchTrack(0); alert("ピッチ修正版・知財データの完全同期完了でやんす！");
+          switchTrack(0); alert("音色フィルタ版・知財データの完全同期完了でやんす！");
         } catch (err) { alert("解析失敗でやんす。"); }
       };
       reader.readAsText(file); event.target.value = '';
@@ -486,9 +485,10 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v0591_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0592_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
     }
 
+    // ★以下、発音コアロジック
     function noteToFreq(note) {
       const scale = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
       const match = note.match(/^([A-G]#?)(\d)$/); if (!match) return 440;
@@ -701,12 +701,12 @@
       document.getElementById('modal-note').value = TRACKS[currentTrackIdx].type === "drum" ? "BD" : "C4";
     }
 
+    // ★v0.59.2仕様変更：エディタモーダル内のPC選択肢も、未実装音色は完全排除ホールド！
     function buildModalPcSelect() {
       const select = document.getElementById('modal-pc');
       let options = `<option value="0">--</option>`;
-      for(let i=1; i<=128; i++) {
-        let label = GM_LABELS[i] ? GM_LABELS[i].split(":")[1] : `Patch${i}`;
-        options += `<option value="${i}">${i}:${label}</option>`;
+      for (let i in GM_LABELS) {
+        options += `<option value="${i}">${GM_LABELS[i]}</option>`;
       }
       select.innerHTML = options;
     }
