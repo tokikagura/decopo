@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.60 (Ultimate PWA Edition)</title>
+  <title>DEC●PO v0.62 (True Gate Timeline Edition)</title>
   
-  <!-- ★v0.60仕様：完全スタンドアローンPWA防衛インフラ -->
   <link rel="manifest" href="manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -64,7 +63,6 @@
 </head>
 <body>
 
-  <!-- Header -->
   <div class="header">
     <span class="logo">DEC●PO</span>
     <button id="btn-roll" class="mode-btn active" onclick="switchMode('roll')">ROLL</button>
@@ -74,7 +72,6 @@
     <button id="btn-play" class="play-btn" onclick="togglePlay()">▶ PLAY</button>
   </div>
 
-  <!-- FILE Bar -->
   <div class="file-bar">
     <button class="mode-btn" style="border-color: #ffea00; color: #ffea00; padding: 2px 4px; font-size: 10px;" onclick="saveToFile()">💾 JSON</button>
     <button class="mode-btn" style="border-color: #00e5ff; color: #00e5ff; padding: 2px 4px; font-size: 10px;" onclick="exportMidiFile()">🎹 MIDI</button>
@@ -98,13 +95,11 @@
 
   <div class="track-bar" id="track-bar-content"></div>
 
-  <!-- Piano Roll View -->
   <div id="view-roll" class="roll-container">
     <div class="step-header" id="step-header-content"></div>
     <div id="grid-content" style="overflow-y: auto; max-height: calc(100vh - 195px); width: max-content;"></div>
   </div>
 
-  <!-- ST/GT View -->
   <div id="view-stgt" class="stgt-container">
     <div class="stgt-table">
       <div class="stgt-header">
@@ -117,7 +112,6 @@
     </div>
   </div>
 
-  <!-- Editor Modal -->
   <div id="edit-modal" class="modal">
     <div style="display: flex; flex-direction: column; gap: 8px;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #00e5ff44; padding-bottom: 4px;">
@@ -375,11 +369,9 @@
       if (accumSt > 0) { stgtTracksData[tIdx].push({ note: "REST", st: accumSt, gt: 0, vel: 0, pc: 0 }); }
     }
 
-    // ★v0.60真打：ライバルbotの指摘2を完全凌駕する「真・和音復元型逆同期エンジン」大開通！
     function stgtDataToGrid(tIdx) {
       if (TRACKS[tIdx].type === "drum") return; 
       
-      // グリッドを綺麗に全パージ
       ALL_NOTES.forEach(note => {
         synthTracksData[tIdx][note] = Array(totalSteps).fill(false);
       });
@@ -390,9 +382,7 @@
       
       data.forEach(row => {
         if (row.note && row.note !== "REST") {
-          // タイムベース96のクロックから、ROLLの16分音符マス位置（24クロック幅）を精密逆算
           let step = Math.floor(currentClock / 24);
-          // 配列バッファの上限を自動拡張アロケーション
           while (step >= totalSteps) {
             for (let t = 0; t < 16; t++) {
               ALL_NOTES.forEach(n => { if(synthTracksData[t][n]) synthTracksData[t][n].push(...Array(16).fill(false)); });
@@ -401,7 +391,7 @@
             totalSteps += 16;
           }
           if (synthTracksData[tIdx][row.note]) {
-            synthTracksData[tIdx][row.note][step] = true; // ★ST0（和音）なら同じクロック位置にとどまるため、同じマスに複数ONが完全復活する大黒字ロジック！！！
+            synthTracksData[tIdx][row.note][step] = true; 
           }
         }
         currentClock += row.st;
@@ -410,10 +400,10 @@
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.60", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
+      const songData = { version: "v0.62", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v060_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v062_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
@@ -425,12 +415,16 @@
         try {
           const songData = JSON.parse(e.target.result);
           if (songData.bpm) { document.getElementById('bpm-val').value = songData.bpm; updateBpm(); }
-          if (songData.synthTracksData) { synthTracksData = songData.synthTracksData; totalSteps = songData.synthTracksData[0]["C4"].length; }
+          if (songData.synthTracksData) { 
+            synthTracksData = songData.synthTracksData; 
+            totalSteps = (songData.synthTracksData[0] && songData.synthTracksData[0]["C4"])
+              ? songData.synthTracksData[0]["C4"].length
+              : (songData.synthTracksData[0] ? Object.values(songData.synthTracksData[0])[0].length : 32);
+          }
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
           if (songData.stgtTracksData) stgtTracksData = songData.stgtTracksData;
           if (songData.tracksConfig) { songData.tracksConfig.forEach((pc, idx) => { if(TRACKS[idx]) { TRACKS[idx].initPc = pc; TRACKS[idx].pc = pc; } }); }
           
-          // ロード時にも全chの逆ロンダリングを回してROLL画面を完全復元
           for(let t=0; t<16; t++) { stgtDataToGrid(t); }
           switchTrack(0); alert("究極完全統合版・知財データの同期完了でやんす！");
         } catch (err) { alert("解析失敗でやんす。"); }
@@ -451,48 +445,46 @@
       return buffer.reverse();
     }
 
+    // ★v0.62大開通：一律+23のデブ固定を完全パージ！ ST/GTリストの真のタイムライン（st/gt）を正確に追跡してSMFを編み上げる無敵の出力マクロ！
     function exportMidiFile() {
       const header = [0x4D, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x60]; 
-      let midiEvents = []; const stepDuration = 24; 
+      let midiEvents = []; 
 
+      // 1. 各chの冒頭初期音色の記帳
       for (let t = 0; t < 16; t++) {
         if (t === 9) continue; 
         midiEvents.push({ time: 0, type: (0xC0 + t), note: (TRACKS[t].initPc - 1), vel: 0, isPc: true });
       }
 
+      // 2. 各シンセchのST/GTリストを完全走査、曲中PCおよび「row.gt」を100%ダイレクト転送！
       for (let t = 0; t < 16; t++) {
-        if (TRACKS[t].type === "drum") continue;
+        if (TRACKS[t].type === "drum") continue; 
         let currentClock = 0;
         if (stgtTracksData[t]) {
           stgtTracksData[t].forEach(row => {
             if (row.pc && row.pc > 0) {
               midiEvents.push({ time: currentClock, type: (0xC0 + t), note: (row.pc - 1), vel: 0, isPc: true });
             }
+            if (row.note && row.note !== "REST") {
+              const midiNum = noteToMidi(row.note);
+              const velVal = row.vel || 100;
+              // Note On と Note Off の時間軸をデータのゲートタイム(row.gt)通りに寸分の狂いもなく精密アロケーション！
+              midiEvents.push({ time: currentClock, type: (0x90 + t), note: midiNum, vel: velVal });
+              midiEvents.push({ time: (currentClock + row.gt), type: (0x80 + t), note: midiNum, vel: 0 });
+            }
             currentClock += row.st;
           });
         }
       }
 
-      for (let t = 0; t < 16; t++) {
-        if (TRACKS[t].type === "drum") continue;
-        ALL_NOTES.forEach(noteName => {
-          const midiNum = noteToMidi(noteName);
-          for (let step = 0; step < totalSteps; step++) {
-            if (synthTracksData[t][noteName] && synthTracksData[t][noteName][step]) {
-              const onTime = step * stepDuration; const offTime = onTime + 23;
-              midiEvents.push({ time: onTime, type: (0x90 + t), note: midiNum, vel: 90 }); 
-              midiEvents.push({ time: offTime, type: (0x80 + t), note: midiNum, vel: 0 });  
-            }
-          }
-        });
-      }
-
+      // 3. ドラムトラック（CH10）のトリガー出力記帳
       const drumMidiMap = { "BD": 36, "SD": 38, "CH": 42, "OH": 46 };
       DRUM_TYPES.forEach(type => {
         const midiNum = drumMidiMap[type];
         for (let step = 0; step < totalSteps; step++) {
           if (drumTrackData[type] && drumTrackData[type][step]) {
-            const onTime = step * stepDuration; const offTime = onTime + 23;
+            const onTime = step * 24; 
+            const offTime = onTime + 12; // ドラムはワンショット固定で安全
             midiEvents.push({ time: onTime, type: 0x99, note: midiNum, vel: 100 }); 
             midiEvents.push({ time: offTime, type: 0x89, note: midiNum, vel: 0 });   
           }
@@ -526,7 +518,7 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v060_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v062_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
     }
 
     function noteToFreq(note) {
@@ -689,7 +681,15 @@
           }
           totalDelay += row.st * unitTime * 1000; let nextIdx = (idx + 1) % data.length;
           
-          if (stgtRange === 'bar') { stgtAccumSt[t] += row.st; if (stgtAccumSt[t] >= 384 || nextIdx === 0) { nextIdx = 0; Math.floor(stgtAccumSt[t] = 0); } } else { stgtAccumSt[t] = 0; }
+          if (stgtRange === 'bar') { 
+            stgtAccumSt[t] += row.st; 
+            if (stgtAccumSt[t] >= 384 || nextIdx === 0) { 
+              nextIdx = 0; 
+              stgtAccumSt[t] = 0; 
+            } 
+          } else { 
+            stgtAccumSt[t] = 0; 
+          }
           idx = nextIdx; loopCount++;
           if (row.st > 0) break;
         }
@@ -795,10 +795,8 @@
         data[currentEditIdx] = { ...currentForm }; 
       } 
       
-      // ★ライバルbotの指摘1を完全パッチ：STGTからROLLへの逆方向自動同期＆即時再描画
       stgtDataToGrid(currentTrackIdx);
       buildPianoRoll();
-      
       closeEdit(); 
     }
     
@@ -807,7 +805,6 @@
     function insertAfter(idx) { stgtTracksData[currentTrackIdx].splice(idx + 1, 0, { note: (TRACKS[currentTrackIdx].type === "drum" ? "BD" : "C4"), st: 96, gt: 72, vel: 100, pc: 0 }); openEdit(idx + 1); }
     document.getElementById('view-roll').addEventListener('scroll', checkAndAppendBar);
     
-    // ★v0.60自動PWA登録管理人リンク
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js')
