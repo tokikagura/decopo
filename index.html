@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.59.2 (Patch Filter Edition)</title>
+  <title>DEC●PO v0.59.3 (Dual Sync Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #000000; color: #00e5ff; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: #000000; border-bottom: 2px solid #00e5ff; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -179,7 +179,6 @@
       return { name: `CH${i+1}`, type: (i === 9 ? "drum" : "synth"), pc: pc, initPc: pc };
     });
     
-    // ★登録された音色アセットポートフォリオ
     const GM_LABELS = {
       1:"1:Piano", 2:"2:Bright Pno", 5:"5:Tine E.Pno", 17:"17:Drawbar Org", 25:"25:Steel Gtr", 
       33:"33:Finger Bass", 36:"36:Fretless Bass", 41:"41:Violin", 49:"49:Strings 1", 53:"53:Choir Aahs",
@@ -212,7 +211,6 @@
     let stgtAccumSt = Array(16).fill(0); 
     let stgtLastPlayedIndex = Array(16).fill(-1);
 
-    // ★v0.59.2仕様変更：未実装の音色（欠番パッチ）を100%完全非表示化（フィルタリング）
     function buildGmPatchSelect() {
       const select = document.getElementById('gm-pc-select');
       let options = "";
@@ -349,13 +347,19 @@
       buildPianoRoll();
     }
 
+    // ★v0.59.3仕様拡張：ドラムトラックのROLL→STGT同期対応追加(要件5)
     function gridDataToStgt(tIdx) {
-      if (TRACKS[tIdx].type === "drum") return;
       stgtTracksData[tIdx] = [];
       let accumSt = 0;
+      const isDrum = TRACKS[tIdx].type === "drum";
+      
       for (let step = 0; step < totalSteps; step++) {
         let activeNotesInStep = [];
-        ALL_NOTES.forEach(note => { if (synthTracksData[tIdx][note] && synthTracksData[tIdx][note][step]) activeNotesInStep.push(note); });
+        if (!isDrum) {
+          ALL_NOTES.forEach(note => { if (synthTracksData[tIdx][note] && synthTracksData[tIdx][note][step]) activeNotesInStep.push(note); });
+        } else {
+          DRUM_TYPES.forEach(type => { if (drumTrackData[type] && drumTrackData[type][step]) activeNotesInStep.push(type); });
+        }
         
         if (activeNotesInStep.length > 0) {
           if (accumSt > 0) { stgtTracksData[tIdx].push({ note: "REST", st: accumSt, gt: 0, vel: 0, pc: 0 }); accumSt = 0; }
@@ -370,29 +374,108 @@
       if (accumSt > 0) { stgtTracksData[tIdx].push({ note: "REST", st: accumSt, gt: 0, vel: 0, pc: 0 }); }
     }
 
+    // ★v0.59.3真髄：STGT編集→ROLL同期の双方向化エンジン大開通(要件1、要件5)
+    function stgtDataToGrid(tIdx) {
+      const isDrum = TRACKS[tIdx].type === "drum";
+      
+      // 1. まずグリッドデータを綺麗にクリアホールド
+      if (!isDrum) {
+        ALL_NOTES.forEach(note => { synthTracksData[tIdx][note] = Array(totalSteps).fill(false); });
+      } else {
+        DRUM_TYPES.forEach(type => { drumTrackData[type] = Array(totalSteps).fill(false); });
+      }
+      
+      let currentClock = 0;
+      const data = stgtTracksData[tIdx] || [];
+      
+      // 2. 蓄積クロックからステップ位置を逆算してROLLへ書き込み
+      data.forEach(row => {
+        let step = Math.floor(currentClock / 24);
+        if (step >= totalSteps) {
+          // もしSTGT編集でステップがハミ出したらROLL側の長さを自動追従拡張
+          let addBars = Math.ceil((step - totalSteps + 1) / 16);
+          for (let b = 0; b < addBars; b++) {
+            for (let tr = 0; tr < 16; tr++) {
+              ALL_NOTES.forEach(n => { if (synthTracksData[tr][n]) synthTracksData[tr][n].push(...Array(16).fill(false)); });
+            }
+            DRUM_TYPES.forEach(d => { if (drumTrackData[d]) drumTrackData[d].push(...Array(16).fill(false)); });
+            totalSteps += 16;
+          }
+        }
+        
+        // PC変更はTRACKSのリアルタイム設定に即時反映可能にする
+        if (row.pc && row.pc > 0) {
+          TRACKS[tIdx].pc = row.pc;
+        }
+        
+        if (row.note && row.note !== "REST") {
+          if (!isDrum) {
+            if (synthTracksData[tIdx][row.note]) synthTracksData[tIdx][row.note][step] = true;
+          } else {
+            if (drumTrackData[row.note]) drumTrackData[row.note][step] = true;
+          }
+        }
+        currentClock += row.st;
+      });
+    }
+
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.59.2", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
+      const songData = { version: "v0.59.3", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v0592_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0593_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
 
+    // ★v0.59.3堅牢化：古いデータや欠損データが来ても絶対に落ちない安全ロード防御処理(要件4)
     function loadFile(event) {
       const file = event.target.files[0]; if (!file) return;
       const reader = new FileReader();
       reader.onload = function(e) {
         try {
           const songData = JSON.parse(e.target.result);
+          if (!songData) throw new Error("Null data");
+          
           if (songData.bpm) { document.getElementById('bpm-val').value = songData.bpm; updateBpm(); }
-          if (songData.synthTracksData) { synthTracksData = songData.synthTracksData; totalSteps = songData.synthTracksData[0]["C4"].length; }
-          if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
-          if (songData.stgtTracksData) stgtTracksData = songData.stgtTracksData;
-          if (songData.tracksConfig) { songData.tracksConfig.forEach((pc, idx) => { if(TRACKS[idx]) { TRACKS[idx].initPc = pc; TRACKS[idx].pc = pc; } }); }
-          switchTrack(0); alert("音色フィルタ版・知財データの完全同期完了でやんす！");
-        } catch (err) { alert("解析失敗でやんす。"); }
+          
+          // 防御処理：synthTracksData[0]["C4"] や基本構造の存在確認
+          if (songData.synthTracksData && songData.synthTracksData[0] && songData.synthTracksData[0]["C4"]) {
+            synthTracksData = songData.synthTracksData;
+            totalSteps = songData.synthTracksData[0]["C4"].length || 32;
+          } else {
+            // 欠損時の初期補完アロケーション
+            totalSteps = 32;
+            synthTracksData = Array(16).fill(null).map(() => Object.fromEntries(ALL_NOTES.map(n => [n, Array(totalSteps).fill(false)])));
+          }
+          
+          if (songData.drumTrackData) {
+            drumTrackData = songData.drumTrackData;
+          } else {
+            drumTrackData = Object.fromEntries(DRUM_TYPES.map(d => [d, Array(totalSteps).fill(false)]));
+          }
+          
+          if (songData.stgtTracksData) {
+            stgtTracksData = songData.stgtTracksData;
+          } else {
+            for(let t=0; t<16; t++) gridDataToStgt(t);
+          }
+          
+          if (songData.tracksConfig && Array.isArray(songData.tracksConfig)) {
+            songData.tracksConfig.forEach((pc, idx) => { if(TRACKS[idx]) { TRACKS[idx].initPc = pc; TRACKS[idx].pc = pc; } });
+          }
+          
+          switchTrack(0); alert("鉄壁の安全ディフェンス・JSONロード完了でやんす！");
+        } catch (err) { 
+          alert("データが破損または古い形式のため、安全インフラで自動補完初期化いたしやした！"); 
+          // 致命的破損時はデフォルトで復旧
+          totalSteps = 32;
+          synthTracksData = Array(16).fill(null).map(() => Object.fromEntries(ALL_NOTES.map(n => [n, Array(totalSteps).fill(false)])));
+          drumTrackData = Object.fromEntries(DRUM_TYPES.map(d => [d, Array(totalSteps).fill(false)]));
+          stgtTracksData = Array(16).fill(null).map(() => []);
+          switchTrack(0);
+        }
       };
       reader.readAsText(file); event.target.value = '';
     }
@@ -410,53 +493,47 @@
       return buffer.reverse();
     }
 
+    // ★v0.59.3精密改修：STGTの絶対タイムラインを完全一元走査する真・MIDIエクスポート(要件2)
     function exportMidiFile() {
       const header = [0x4D, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x60]; 
-      let midiEvents = []; const stepDuration = 24; 
+      let midiEvents = []; 
 
+      // 1. 各chの初期音色の記帳
       for (let t = 0; t < 16; t++) {
         if (t === 9) continue; 
         midiEvents.push({ time: 0, type: (0xC0 + t), note: (TRACKS[t].initPc - 1), vel: 0, isPc: true });
       }
 
+      // 2. 全トラックのSTGTタイムラインを絶対時間軸で精密トレース（複数音色のズレを完全解消）
       for (let t = 0; t < 16; t++) {
-        if (TRACKS[t].type === "drum") continue;
         let currentClock = 0;
-        if (stgtTracksData[t]) {
-          stgtTracksData[t].forEach(row => {
-            if (row.pc && row.pc > 0) {
-              midiEvents.push({ time: currentClock, type: (0xC0 + t), note: (row.pc - 1), vel: 0, isPc: true });
-            }
-            currentClock += row.st;
-          });
-        }
-      }
-
-      for (let t = 0; t < 16; t++) {
-        if (TRACKS[t].type === "drum") continue;
-        ALL_NOTES.forEach(noteName => {
-          const midiNum = noteToMidi(noteName);
-          for (let step = 0; step < totalSteps; step++) {
-            if (synthTracksData[t][noteName] && synthTracksData[t][noteName][step]) {
-              const onTime = step * stepDuration; const offTime = onTime + 23;
-              midiEvents.push({ time: onTime, type: (0x90 + t), note: midiNum, vel: 90 }); 
-              midiEvents.push({ time: offTime, type: (0x80 + t), note: midiNum, vel: 0 });  
+        const data = stgtTracksData[t] || [];
+        
+        data.forEach(row => {
+          // 曲中プログラムチェンジの記帳
+          if (TRACKS[t].type !== "drum" && row.pc && row.pc > 0) {
+            midiEvents.push({ time: currentClock, type: (0xC0 + t), note: (row.pc - 1), vel: 0, isPc: true });
+          }
+          
+          // ノートイベントの記帳
+          if (row.note && row.note !== "REST") {
+            if (TRACKS[t].type !== "drum") {
+              const midiNum = noteToMidi(row.note);
+              midiEvents.push({ time: currentClock, type: (0x90 + t), note: midiNum, vel: row.vel || 90 }); 
+              midiEvents.push({ time: currentClock + (row.gt || 18), type: (0x80 + t), note: midiNum, vel: 0 });  
+            } else {
+              // ドラムトラック（CH10固定）のSTGT出力対応
+              const drumMidiMap = { "BD": 36, "SD": 38, "CH": 42, "OH": 46 };
+              const midiNum = drumMidiMap[row.note];
+              if (midiNum) {
+                midiEvents.push({ time: currentClock, type: 0x99, note: midiNum, vel: row.vel || 100 }); 
+                midiEvents.push({ time: currentClock + (row.gt || 18), type: 0x89, note: midiNum, vel: 0 });   
+              }
             }
           }
+          currentClock += row.st;
         });
       }
-
-      const drumMidiMap = { "BD": 36, "SD": 38, "CH": 42, "OH": 46 };
-      DRUM_TYPES.forEach(type => {
-        const midiNum = drumMidiMap[type];
-        for (let step = 0; step < totalSteps; step++) {
-          if (drumTrackData[type] && drumTrackData[type][step]) {
-            const onTime = step * stepDuration; const offTime = onTime + 23;
-            midiEvents.push({ time: onTime, type: 0x99, note: midiNum, vel: 100 }); 
-            midiEvents.push({ time: offTime, type: 0x89, note: midiNum, vel: 0 });   
-          }
-        }
-      });
 
       midiEvents.sort((a, b) => {
         if (a.time !== b.time) return a.time - b.time;
@@ -485,10 +562,9 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v0592_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v0593_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
     }
 
-    // ★以下、発音コアロジック
     function noteToFreq(note) {
       const scale = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
       const match = note.match(/^([A-G]#?)(\d)$/); if (!match) return 440;
@@ -558,6 +634,7 @@
       }
     }
 
+    // ★v0.59.3インフラ改善：iOS Safari連打対策、AudioContext破棄を損切りし、再利用・サスペンド駆動へ移行(要件3)
     function togglePlay() {
       const btn = document.getElementById('btn-play');
       if (isPlaying) { 
@@ -565,17 +642,24 @@
         if (timerId) clearInterval(timerId); 
         stgtTimerIds.forEach(tid => { if(tid) clearTimeout(tid); }); stgtTimerIds.fill(null);
         stgtLastPlayedIndex.fill(-1); clearHighlight(); 
-        if (audioCtx) { try { audioCtx.close(); } catch(e) {} audioCtx = null; }
+        
+        // 毎回closeせず、安全にsuspendさせてリソース再利用
+        if (audioCtx) { 
+          audioCtx.suspend().catch(e => {}); 
+        }
         
         TRACKS.forEach(t => t.pc = t.initPc);
         const gmSelect = document.getElementById('gm-pc-select');
         if (TRACKS[currentTrackIdx].type !== "drum") gmSelect.value = TRACKS[currentTrackIdx].initPc;
       } 
       else { 
-        if (audioCtx) { try { audioCtx.close(); } catch(e) {} audioCtx = null; }
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // 存在しない時だけ新規生成し、既にある場合はresume()で起こす
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } else {
+          audioCtx.resume().catch(e => {});
+        }
         noiseBuffer = null;
-
         TRACKS.forEach(t => t.pc = t.initPc);
 
         try {
@@ -606,13 +690,16 @@
         const stepSec = (60 / bpm / 4);
 
         for (let t = 0; t < 16; t++) {
-          if (t === 9) continue;
+          if (t === 9) {
+            // ドラムシーケンスのROLL駆動
+            if (drumTrackData["OH"] && drumTrackData["OH"][currentStep]) playDrum("OH", stepSec);
+            if (drumTrackData["CH"] && drumTrackData["CH"][currentStep]) playDrum("CH", stepSec);
+            if (drumTrackData["SD"] && drumTrackData["SD"][currentStep]) playDrum("SD", stepSec);
+            if (drumTrackData["BD"] && drumTrackData["BD"][currentStep]) playDrum("BD", stepSec);
+            continue;
+          }
           ALL_NOTES.forEach(note => { if (synthTracksData[t] && synthTracksData[t][note] && synthTracksData[t][note][currentStep]) { playToneWithGm(note, t, stepSec * 0.9); } });
         }
-        if (drumTrackData["OH"] && drumTrackData["OH"][currentStep]) playDrum("OH", stepSec);
-        if (drumTrackData["CH"] && drumTrackData["CH"][currentStep]) playDrum("CH", stepSec);
-        if (drumTrackData["SD"] && drumTrackData["SD"][currentStep]) playDrum("SD", stepSec);
-        if (drumTrackData["BD"] && drumTrackData["BD"][currentStep]) playDrum("BD", stepSec);
 
         const isDrum = TRACKS[currentTrackIdx].type === "drum";
         if (!isDrum) {
@@ -698,10 +785,8 @@
         options += ALL_NOTES.map(n => `<option value="${n}">${n}</option>`).join('');
       }
       document.getElementById('modal-note').innerHTML = options; 
-      document.getElementById('modal-note').value = TRACKS[currentTrackIdx].type === "drum" ? "BD" : "C4";
     }
 
-    // ★v0.59.2仕様変更：エディタモーダル内のPC選択肢も、未実装音色は完全排除ホールド！
     function buildModalPcSelect() {
       const select = document.getElementById('modal-pc');
       let options = `<option value="0">--</option>`;
@@ -742,6 +827,8 @@
       document.getElementById('edit-modal').style.display = 'block'; 
       if(idx !== 'new') renderStgtTable(); 
     }
+    
+    // ★双方向コミット処理のフック
     function commitEdit() { 
       const data = stgtTracksData[currentTrackIdx]; 
       currentForm.note = document.getElementById('modal-note').value; 
@@ -753,12 +840,13 @@
         data.push({ ...currentForm }); 
       } else { 
         data[currentEditIdx] = { ...currentForm }; 
-      } 
+      }
+      stgtDataToGrid(currentTrackIdx); // ROLLグリッドへ逆同期反映！
       closeEdit(); 
     }
     function closeEdit() { document.getElementById('edit-modal').style.display = 'none'; renderStgtTable(); }
-    function deleteRow(idx) { stgtTracksData[currentTrackIdx].splice(idx, 1); renderStgtTable(); }
-    function insertAfter(idx) { stgtTracksData[currentTrackIdx].splice(idx + 1, 0, { note: (TRACKS[currentTrackIdx].type === "drum" ? "BD" : "C4"), st: 96, gt: 72, vel: 100, pc: 0 }); openEdit(idx + 1); }
+    function deleteRow(idx) { stgtTracksData[currentTrackIdx].splice(idx, 1); stgtDataToGrid(currentTrackIdx); renderStgtTable(); }
+    function insertAfter(idx) { stgtTracksData[currentTrackIdx].splice(idx + 1, 0, { note: (TRACKS[currentTrackIdx].type === "drum" ? "BD" : "C4"), st: 96, gt: 72, vel: 100, pc: 0 }); stgtDataToGrid(currentTrackIdx); openEdit(idx + 1); }
     document.getElementById('view-roll').addEventListener('scroll', checkAndAppendBar);
     
     buildGmPatchSelect();
