@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.55 (Multi-Solo & Bar Limit Edition)</title>
+  <title>DEC●PO v0.55.1 (8-bit Pitch Fixed Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #0a0a14; color: #e0e0e0; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: linear-gradient(90deg, #0a0a14 0%, #0d1a2e 50%, #0a0a14 100%); border-bottom: 1px solid #00d4ff33; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -14,15 +14,12 @@
     .play-btn.playing { background: #00ff88; color: #0a0a14; }
     .bpm-input { background: #0d1a2e; border: 1px solid #00d4ff44; color: #00d4ff; width: 42px; padding: 4px; text-align: center; font-size: 12px; }
     
-    /* FILEコントロールバー */
     .file-bar { background: #0d1220; border-bottom: 1px solid #00d4ff22; padding: 4px 12px; display: flex; gap: 6px; font-size: 11px; justify-content: flex-start; }
     
-    /* v0.55新設：ST/GT専用の再生オプションコントロールインフラ */
     .stgt-ctrl-bar { padding: 4px 12px; display: flex; gap: 6px; font-size: 10px; background: #080810; border-bottom: 1px solid #00d4ff11; align-items: center; }
     .stgt-ctrl-bar .mode-btn { padding: 2px 6px; font-size: 10px; border-color: #555; color: #888; }
     .stgt-ctrl-bar .mode-btn.active { border-color: #00ff88; color: #00ff88; background: #00ff8811; }
 
-    /* トラック選択コンベアバー */
     .track-bar { background: #07070d; border-bottom: 1px solid #00d4ff11; padding: 4px 12px; display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .track-btn { background: #0d1a2e; border: 1px solid #00d4ff33; color: #666; padding: 3px 8px; font-size: 10px; cursor: pointer; font-weight: bold; white-space: nowrap; }
     .track-btn.active { background: #00d4ff11; color: #00d4ff; border-color: #00d4ff; }
@@ -43,7 +40,6 @@
     .stgt-header { display: grid; grid-template-columns: 24px 60px 110px 50px 50px 40px 40px; border-bottom: 1px solid #00d4ff22; padding: 6px 8px; font-size: 10px; color: #555; gap: 4px; }
     .stgt-row { display: grid; grid-template-columns: 24px 60px 110px 50px 50px 40px 40px; align-items: center; border-bottom: 1px solid #111; padding: 6px 8px; gap: 4px; cursor: pointer; }
     
-    /* 仮想テンキーエディタモーダル */
     .modal { position: fixed; bottom: 0; left: 0; right: 0; background: #0d1a2e; border-top: 1px solid #00d4ff66; padding: 10px 12px 24px; z-index: 200; display: none; box-shadow: 0 -4px 20px #000000aa; }
     .st-box { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
     .st-btn { background: #0a0a14; border: 1px solid #333; color: #aaa; padding: 4px 5px; font-size: 9px; cursor: pointer; }
@@ -51,7 +47,6 @@
     .ok-btn { background: #00ff88; border: 1px solid #00ff88; color: #0a0a14; padding: 4px 14px; font-size: 11px; font-weight: bold; cursor: pointer; }
     .modal-label { color: #555; font-size: 9px; display: block; margin-bottom: 2px; text-transform: uppercase; }
 
-    /* iPhone SE横画面（Landscape）特化レイアウト */
     @media (orientation: landscape) {
       .modal { top: 0; bottom: 0; left: auto; right: 0; width: 220px; border-top: none; border-left: 1px solid #00d4ff66; padding: 8px 10px; height: 100vh; box-sizing: border-box; overflow-y: auto; }
       .modal-main-row { flex-direction: column !important; align-items: stretch !important; gap: 6px !important; }
@@ -146,12 +141,16 @@
   </div>
 
   <script>
-    const NOTES = ["C", "B", "A#", "A", "G#", "G", "F#", "F", "E", "D#", "D", "C#"];
-    const OCTAVES = [5, 4, 3];
-    const ALL_NOTES = OCTAVES.flatMap(oct => NOTES.map(n => `${n}${oct}`));
     const BLACK_NOTES = ["C#", "D#", "F#", "G#", "A#"];
     const ST_OPTIONS = [1,2,3,4,6,8,12,16,24,32,48,96];
     const ST_LABELS = { 1:"64分", 2:"32分", 3:"付点32", 4:"16分", 6:"付点16", 8:"8分", 12:"付点8", 16:"4分", 24:"付点4", 32:"2分", 48:"全音符", 96:"全×2" };
+
+    // ★index-8bit仕様：国際標準MIDI音階に準拠した、ねじれのない一直線「真・8bitピッチ物理配列」
+    const ALL_NOTES = [];
+    for (let oct = 5; oct >= 3; oct--) {
+      const scaleHighToLow = ["B", "A#", "A", "G#", "G", "F#", "F", "E", "D#", "D", "C#", "C"];
+      scaleHighToLow.forEach(n => ALL_NOTES.push(`${n}${oct}`));
+    }
 
     const TRACKS = [
       { name: "TK1 矩形1", type: "synth", osc: "square" },
@@ -167,7 +166,6 @@
     let synthTracksData = Array(4).fill(null).map(() => Object.fromEntries(ALL_NOTES.map(n => [n, Array(totalSteps).fill(false)])));
     let drumTrackData = Object.fromEntries(DRUM_TYPES.map(d => [d, Array(totalSteps).fill(false)]));
 
-    // ★v0.55大拡張：ST/GT用数値を5トラック完全に独立化（マルチコンベア化）
     let stgtTracksData = Array(5).fill(null).map(() => []);
     
     let currentEditIdx = null;
@@ -177,16 +175,14 @@
     let noiseBuffer = null; 
     let isPlaying = false;
     
-    // シーケンサー個別レジストリポインタ
-    let currentStep = 0;   // ROLL用ポインタ
-    let timerId = null;    // ROLL用インターバルID
+    let currentStep = 0;   
+    let timerId = null;    
     
-    // ★v0.55新設：マルチトラックST/GT自律再生インフラ用変数
-    let stgtPlayMode = 'all'; // 'all' or 'solo'
-    let stgtRange = 'full';   // 'full' or 'bar'
+    let stgtPlayMode = 'all'; 
+    let stgtRange = 'full';   
     let stgtIndices = [0, 0, 0, 0, 0];
     let stgtTimerIds = [null, null, null, null, null];
-    let stgtAccumSt = [0, 0, 0, 0, 0]; // 1-BARループ計算用の累積STレジストリ
+    let stgtAccumSt = [0, 0, 0, 0, 0];
 
     function buildTrackBar() {
       const bar = document.getElementById('track-bar-content');
@@ -216,7 +212,7 @@
       stgtPlayMode = m;
       document.getElementById('stgt-m-all').classList.toggle('active', m === 'all');
       document.getElementById('stgt-m-solo').classList.toggle('active', m === 'solo');
-      if (isPlaying) { togglePlay(); togglePlay(); } // 発音エンジンを安全に再起動（大開通）
+      if (isPlaying) { togglePlay(); togglePlay(); } 
     }
 
     function setStgtRange(r) {
@@ -325,11 +321,11 @@
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.55", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
+      const songData = { version: "v0.55.1-8bit", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v055_${Date.now()}.json`; a.click();
+      a.href = url; a.download = `decopo_8bit_${Date.now()}.json`; a.click();
       URL.revokeObjectURL(url);
     }
 
@@ -347,15 +343,9 @@
             totalSteps = songData.synthTracksData[0]["C4"].length;
           }
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
-          
-          // ★下位互換救済パッチ
-          if (songData.stgtTracksData) {
-            stgtTracksData = songData.stgtTracksData;
-          } else if (songData.stgtData) {
-            stgtTracksData[0] = songData.stgtData;
-          }
+          if (songData.stgtTracksData) stgtTracksData = songData.stgtTracksData;
           switchTrack(0);
-          alert("拡張マルチインフラデータを完全同期いたしやした！");
+          alert("8bitインフラデータを完全同期いたしやした！");
         } catch (err) { alert("解析失敗でやんす。"); }
       };
       reader.readAsText(file); event.target.value = '';
@@ -420,7 +410,7 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob);
-      const a = document.createElement('a'); a.href = url; a.download = `decopo_v055_track_${Date.now()}.mid`; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `decopo_8bit_track_${Date.now()}.mid`; a.click();
       URL.revokeObjectURL(url);
     }
 
@@ -444,7 +434,7 @@
 
     function playStgtTone(freq, duration, oscType) {
       if (!audioCtx) return; const now = audioCtx.currentTime;
-      if (oscType === "noise") { playDrum(currentTrackIdx === 4 ? "SD" : "CH"); return; } // ドラムトラック救済用パッチ
+      if (oscType === "noise") { playDrum(currentTrackIdx === 4 ? "SD" : "CH"); return; } 
       const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
       const oscOvertone = audioCtx.createOscillator(); const gainOvertone = audioCtx.createGain(); oscOvertone.type = 'sine'; oscOvertone.frequency.value = freq * 2;
       gainBase.gain.setValueAtTime(0.25, now); gainBase.gain.linearRampToValueAtTime(0.0, now + duration);
@@ -498,15 +488,12 @@
         if (isRollMode) {
           currentStep = 0; runSequencer(); 
         } else {
-          // ★v0.55機能：ST/GT再生時の再生ポインタ・累積ST初期化
           stgtIndices.fill(0);
           stgtAccumSt.fill(0);
           
           if (stgtPlayMode === 'solo') {
-            // SOLOモード：そのトラックだけを数珠つなぎループ再生！
             runStgtSequencer(currentTrackIdx);
           } else {
-            // ALLモード：全5トラックを完全並列でチャカチャカ自律走行！
             for (let t = 0; t < 5; t++) { runStgtSequencer(t); }
           }
         }
@@ -515,7 +502,6 @@
 
     function updateBpm() { if (isPlaying) { if (timerId) { clearInterval(timerId); runSequencer(); } } }
     
-    // ROLL用シーケンサー
     function runSequencer() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120; const interval = (60 / bpm / 4) * 1000;
       const stepExecution = () => {
@@ -537,7 +523,6 @@
       stepExecution(); timerId = setInterval(stepExecution, interval);
     }
 
-    // ★v0.55超進化：独立トラック並列走査対応・ST/GT数珠つなぎエンジン
     function runStgtSequencer(t) {
       const data = stgtTracksData[t];
       if (data.length === 0) return;
@@ -545,7 +530,6 @@
       const stepExecution = () => {
         if (!isPlaying) return;
 
-        // カレント表示中のトラックならテーブルの緑発光ハイライトをリアルタイム更新
         if (t === currentTrackIdx && document.getElementById('view-stgt').style.display === 'block') {
           renderStgtTable();
         }
@@ -553,7 +537,7 @@
         let idx = stgtIndices[t];
         const row = data[idx];
         const bpm = Number(document.getElementById('bpm-val').value) || 120;
-        const unitTime = (60 / bpm) / 16; // 64分音符1個分(ST=1)の時間
+        const unitTime = (60 / bpm) / 16; 
 
         if (row.note && row.note !== "REST") {
           const freq = noteToFreq(row.note);
@@ -564,13 +548,11 @@
         const nextDelay = row.st * unitTime * 1000;
         let nextIdx = (idx + 1) % data.length;
 
-        // ★v0.55新設：「その小節だけ」を制限ループする1-BAR判定インフラ
         if (stgtRange === 'bar') {
           stgtAccumSt[t] += row.st;
-          // 4分音符(ST16)×4発 = 64ステップが1小節
           if (stgtAccumSt[t] >= 64 || nextIdx === 0) {
-            nextIdx = 0;       // 1小節に達したら強制的にアタマの行へロールバック！
-            stgtAccumSt[t] = 0; // 累積初期化
+            nextIdx = 0;       
+            stgtAccumSt[t] = 0; 
           }
         } else {
           stgtAccumSt[t] = 0;
@@ -601,7 +583,6 @@
       
       container.innerHTML = data.map((row, i) => {
         const idxCur = stgtIndices[currentTrackIdx];
-        // いま鳴っている現在行を逆算記帳
         const isCurrent = isPlaying && isStgtMode && (
           idxCur === (i + 1) % data.length || (idxCur === 0 && i === data.length - 1)
         );
