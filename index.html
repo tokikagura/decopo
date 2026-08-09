@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.65 (True PNG Standard Edition)</title>
+  <title>DEC●PO v0.65a (ROLL Data Guard)</title>
   
-  <!-- ★v0.65仕様：完全スタンドアローンPWA防衛インフラ -->
+  <!-- ★v0.65a：ROLL編集によるST/GT詳細データ消失を防止 -->
   <link rel="manifest" href="manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -347,14 +347,45 @@
       }
     }
 
+    function hasDetailedStgtData(tIdx) {
+      if (TRACKS[tIdx].type === "drum") return false;
+      const data = stgtTracksData[tIdx] || [];
+
+      for (const row of data) {
+        const st = Number(row.st) || 0;
+        const gt = Number(row.gt) || 0;
+        const vel = Number(row.vel) || 0;
+        const pc = Number(row.pc) || 0;
+
+        // ROLLから安全に再生成できるのは、v0.65の標準値だけ。
+        // それ以外はST/GT側で作られた詳細情報として保護する。
+        if (pc > 0) return true;
+
+        if (row.note && row.note !== "REST") {
+          if (st !== 0 && st !== 24) return true;
+          if (gt !== 18) return true;
+          if (vel !== 100) return true;
+        } else if (row.note === "REST") {
+          if (st < 0 || st % 24 !== 0) return true;
+        }
+      }
+      return false;
+    }
+
     function toggleCell(key, step) {
       const isDrum = TRACKS[currentTrackIdx].type === "drum";
       if (!isDrum) {
+        // ST/GTで作ったGT・VEL・PC・細分STを、ROLL編集で黙って消さない。
+        // 詳細データがあるトラックはROLL側の編集を止め、元データを保持する。
+        if (hasDetailedStgtData(currentTrackIdx)) {
+          alert("ST/GTの詳細データを保護するため、このトラックのROLL編集は停止しました。ST/GT画面で編集してください。");
+          return;
+        }
         synthTracksData[currentTrackIdx][key][step] = !synthTracksData[currentTrackIdx][key][step];
+        gridDataToStgt(currentTrackIdx);
       } else {
         drumTrackData[key][step] = !drumTrackData[key][step];
       }
-      gridDataToStgt(currentTrackIdx); 
       buildPianoRoll();
     }
 
