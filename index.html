@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.65a (ROLL Data Guard)</title>
+  <title>DEC●PO v0.65e (PWA Cache Refresh)</title>
   
-  <!-- ★v0.65a：ROLL編集によるST/GT詳細データ消失を防止 -->
+  <!-- ★v0.65e：v0.65dを維持し、PWAキャッシュ更新系を整理 -->
   <link rel="manifest" href="manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -142,17 +142,17 @@
         
         <div class="modal-input-group">
           <span class="modal-label">ST</span>
-          <input type="number" id="modal-st" class="bpm-input" inputmode="numeric" pattern="[0-9]*" oninput="syncFormSt(this.value)">
+          <input type="number" id="modal-st" class="bpm-input" inputmode="numeric" pattern="[0-9]*" min="0" step="1" oninput="syncFormSt(this.value)">
         </div>
 
         <div class="modal-input-group">
           <span class="modal-label">GT</span>
-          <input type="number" id="modal-gt" class="bpm-input" inputmode="numeric" pattern="[0-9]*">
+          <input type="number" id="modal-gt" class="bpm-input" inputmode="numeric" pattern="[0-9]*" min="0" step="1">
         </div>
 
         <div class="modal-input-group">
           <span class="modal-label">VEL</span>
-          <input type="number" id="modal-vel" class="bpm-input" inputmode="numeric" pattern="[0-9]*">
+          <input type="number" id="modal-vel" class="bpm-input" inputmode="numeric" pattern="[0-9]*" min="0" max="127" step="1">
         </div>
 
         <button class="ok-btn" onclick="commitEdit()" style="margin-left: auto;">OK</button>
@@ -348,8 +348,8 @@
     }
 
     function hasDetailedStgtData(tIdx) {
-      if (TRACKS[tIdx].type === "drum") return false;
       const data = stgtTracksData[tIdx] || [];
+      const isDrum = TRACKS[tIdx].type === "drum";
 
       for (const row of data) {
         const st = Number(row.st) || 0;
@@ -357,11 +357,11 @@
         const vel = Number(row.vel) || 0;
         const pc = Number(row.pc) || 0;
 
-        // ROLLから安全に再生成できるのは、v0.65の標準値だけ。
-        // それ以外はST/GT側で作られた詳細情報として保護する。
+        // ROLLから安全に再生成できる標準値以外は、ST/GT側の詳細情報として保護する。
         if (pc > 0) return true;
 
         if (row.note && row.note !== "REST") {
+          if (isDrum && !DRUM_TYPES.includes(row.note)) return true;
           if (st !== 0 && st !== 24) return true;
           if (gt !== 18) return true;
           if (vel !== 100) return true;
@@ -374,34 +374,41 @@
 
     function toggleCell(key, step) {
       const isDrum = TRACKS[currentTrackIdx].type === "drum";
+
+      // ST/GTで作ったGT・VEL・PC・細分STを、ROLL編集で黙って消さない。
+      // ドラムも同じ保護ルールを使う。
+      if (hasDetailedStgtData(currentTrackIdx)) {
+        alert("ST/GTの詳細データを保護するため、このトラックのROLL編集は停止しました。ST/GT画面で編集してください。");
+        return;
+      }
+
       if (!isDrum) {
-        // ST/GTで作ったGT・VEL・PC・細分STを、ROLL編集で黙って消さない。
-        // 詳細データがあるトラックはROLL側の編集を止め、元データを保持する。
-        if (hasDetailedStgtData(currentTrackIdx)) {
-          alert("ST/GTの詳細データを保護するため、このトラックのROLL編集は停止しました。ST/GT画面で編集してください。");
-          return;
-        }
         synthTracksData[currentTrackIdx][key][step] = !synthTracksData[currentTrackIdx][key][step];
-        gridDataToStgt(currentTrackIdx);
       } else {
         drumTrackData[key][step] = !drumTrackData[key][step];
       }
+      gridDataToStgt(currentTrackIdx);
       buildPianoRoll();
     }
 
     function gridDataToStgt(tIdx) {
-      if (TRACKS[tIdx].type === "drum") return;
       stgtTracksData[tIdx] = [];
       let accumSt = 0;
+      const isDrum = TRACKS[tIdx].type === "drum";
+
       for (let step = 0; step < totalSteps; step++) {
         let activeNotesInStep = [];
-        ALL_NOTES.forEach(note => { if (synthTracksData[tIdx][note] && synthTracksData[tIdx][note][step]) activeNotesInStep.push(note); });
-        
+        if (isDrum) {
+          DRUM_TYPES.forEach(type => { if (drumTrackData[type] && drumTrackData[type][step]) activeNotesInStep.push(type); });
+        } else {
+          ALL_NOTES.forEach(note => { if (synthTracksData[tIdx][note] && synthTracksData[tIdx][note][step]) activeNotesInStep.push(note); });
+        }
+
         if (activeNotesInStep.length > 0) {
           if (accumSt > 0) { stgtTracksData[tIdx].push({ note: "REST", stroke: accumSt, st: accumSt, gt: 0, vel: 0, pc: 0 }); accumSt = 0; }
           activeNotesInStep.forEach((nt, nIdx) => {
             let isLast = nIdx === activeNotesInStep.length - 1;
-            stgtTracksData[tIdx].push({ note: nt, st: isLast ? 24 : 0, gt: 18, vel: 100, pc: 0 }); 
+            stgtTracksData[tIdx].push({ note: nt, st: isLast ? 24 : 0, gt: 18, vel: 100, pc: 0 });
           });
         } else {
           accumSt += 24;
@@ -411,16 +418,20 @@
     }
 
     function stgtDataToGrid(tIdx) {
-      if (TRACKS[tIdx].type === "drum") return; 
-      
-      ALL_NOTES.forEach(note => {
-        synthTracksData[tIdx][note] = Array(totalSteps).fill(false);
-      });
-      
+      const isDrum = TRACKS[tIdx].type === "drum";
+
+      if (isDrum) {
+        DRUM_TYPES.forEach(type => { drumTrackData[type] = Array(totalSteps).fill(false); });
+      } else {
+        ALL_NOTES.forEach(note => {
+          synthTracksData[tIdx][note] = Array(totalSteps).fill(false);
+        });
+      }
+
       let currentClock = 0;
       const data = stgtTracksData[tIdx];
       if (!data) return;
-      
+
       data.forEach(row => {
         if (row.note && row.note !== "REST") {
           let step = Math.floor(currentClock / 24);
@@ -431,20 +442,25 @@
             DRUM_TYPES.forEach(type => { drumTrackData[type].push(...Array(16).fill(false)); });
             totalSteps += 16;
           }
-          if (synthTracksData[tIdx][row.note]) {
-            synthTracksData[tIdx][row.note][step] = true; 
+
+          if (isDrum) {
+            if (DRUM_TYPES.includes(row.note) && drumTrackData[row.note]) {
+              drumTrackData[row.note][step] = true;
+            }
+          } else if (synthTracksData[tIdx][row.note]) {
+            synthTracksData[tIdx][row.note][step] = true;
           }
         }
-        currentClock += row.st;
+        currentClock += Number(row.st) || 0;
       });
     }
 
     function saveToFile() {
       const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.65", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
+      const songData = { version: "v0.65e", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `decopo_v065_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_v065e_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
@@ -456,18 +472,48 @@
         try {
           const songData = JSON.parse(e.target.result);
           if (songData.bpm) { document.getElementById('bpm-val').value = songData.bpm; updateBpm(); }
-          if (songData.synthTracksData) { 
+          const hasSynthData = Array.isArray(songData.synthTracksData);
+          const hasStgtData = Array.isArray(songData.stgtTracksData);
+
+          if (hasSynthData) { 
             synthTracksData = songData.synthTracksData; 
             totalSteps = (songData.synthTracksData[0] && songData.synthTracksData[0]["C4"])
               ? songData.synthTracksData[0]["C4"].length
-              : (songData.synthTracksData[0] ? Object.values(songData.synthTracksData[0])[0].length : 32);
+              : (songData.synthTracksData[0] && Object.values(songData.synthTracksData[0])[0]
+                  ? Object.values(songData.synthTracksData[0])[0].length
+                  : 32);
           }
           if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
-          if (songData.stgtTracksData) stgtTracksData = songData.stgtTracksData;
+          if (hasStgtData) stgtTracksData = songData.stgtTracksData;
           if (songData.tracksConfig) { songData.tracksConfig.forEach((pc, idx) => { if(TRACKS[idx]) { TRACKS[idx].initPc = pc; TRACKS[idx].pc = pc; } }); }
-          
-          for(let t=0; t<16; t++) { stgtDataToGrid(t); }
-          switchTrack(0); alert("究極完全統合版・知財データの同期完了でやんす！");
+
+          if (hasStgtData) {
+            // 新形式：ST/GT詳細データを正本としてROLL表示を再構築する。
+            // v0.65以前のJSONでは、ドラムROLLだけ存在しST/GT(CH10)が空のことがあるため保護する。
+            const drumStgtHasRows = Array.isArray(stgtTracksData[9]) && stgtTracksData[9].length > 0;
+            const drumGridHasHits = !!songData.drumTrackData && DRUM_TYPES.some(type =>
+              Array.isArray(songData.drumTrackData[type]) && songData.drumTrackData[type].some(Boolean)
+            );
+
+            for (let t = 0; t < 16; t++) {
+              if (t !== 9) stgtDataToGrid(t);
+            }
+            if (drumStgtHasRows) {
+              stgtDataToGrid(9);
+            } else if (drumGridHasHits) {
+              // 旧ドラムROLLを消さず、そこからST/GT標準データを生成する。
+              gridDataToStgt(9);
+            } else {
+              stgtDataToGrid(9);
+            }
+          } else if (hasSynthData) {
+            // 旧形式：ROLLデータを消さず、読み込んだROLLからST/GTの標準データを新規生成する。
+            // 現在セッションの古いST/GTデータを混ぜないため、先に空配列へ初期化する。
+            stgtTracksData = Array(16).fill(null).map(() => []);
+            for (let t = 0; t < 16; t++) { gridDataToStgt(t); }
+          }
+
+          switchTrack(0); alert("JSONデータの安全な同期完了でやんす！");
         } catch (err) { alert("解析失敗でやんす。"); }
       };
       reader.readAsText(file); event.target.value = '';
@@ -693,12 +739,24 @@
       stepExecution(); timerId = setInterval(stepExecution, interval);
     }
 
+    function resetTrackPcAtLoopStart(t) {
+      TRACKS[t].pc = TRACKS[t].initPc;
+      if (t === currentTrackIdx && TRACKS[t].type !== "drum") {
+        document.getElementById('gm-pc-select').value = TRACKS[t].initPc;
+      }
+    }
+
     function runStgtSequencer(t) {
       const data = stgtTracksData[t]; if (data.length === 0) return;
       const stepExecution = () => {
         if (!isPlaying) return;
         const bpm = Number(document.getElementById('bpm-val').value) || 120; const unitTime = (60 / bpm) / 96; 
         let idx = stgtIndices[t]; let totalDelay = 0; let loopCount = 0;
+
+        // v0.65d: each ST/GT loop starts from the track's initial Program Change.
+        // A PC event on row 0 can immediately override this value.
+        if (idx === 0) resetTrackPcAtLoopStart(t);
+
         while (isPlaying) {
           if (idx >= data.length || loopCount > 64) { idx = 0; stgtAccumSt[t] = 0; if (data.length === 0 || loopCount > 0) break; }
           const row = data[idx]; if (!row) break;
@@ -818,13 +876,30 @@
       if(idx !== 'new') renderStgtTable(); 
     }
     
+    function sanitizeNonNegativeClock(rawValue, fallback) {
+      const value = Number(rawValue);
+      if (!Number.isFinite(value)) return Math.max(0, Math.round(Number(fallback) || 0));
+      return Math.max(0, Math.round(value));
+    }
+
+    function sanitizeMidiVelocity(rawValue, fallback) {
+      const value = Number(rawValue);
+      const safe = Number.isFinite(value) ? Math.round(value) : Math.round(Number(fallback) || 0);
+      return Math.max(0, Math.min(127, safe));
+    }
+
     function commitEdit() { 
       const data = stgtTracksData[currentTrackIdx]; 
       currentForm.note = document.getElementById('modal-note').value; 
       currentForm.pc = Number(document.getElementById('modal-pc').value); 
-      currentForm.st = Number(document.getElementById('modal-st').value); 
-      currentForm.gt = Number(document.getElementById('modal-gt').value); 
-      currentForm.vel = Number(document.getElementById('modal-vel').value); 
+      currentForm.st = sanitizeNonNegativeClock(document.getElementById('modal-st').value, currentForm.st); 
+      currentForm.gt = sanitizeNonNegativeClock(document.getElementById('modal-gt').value, currentForm.gt); 
+      currentForm.vel = sanitizeMidiVelocity(document.getElementById('modal-vel').value, currentForm.vel); 
+
+      // Keep the sanitized values visible if the editor remains open during future changes.
+      document.getElementById('modal-st').value = currentForm.st;
+      document.getElementById('modal-gt').value = currentForm.gt;
+      document.getElementById('modal-vel').value = currentForm.vel;
       if (currentEditIdx === 'new') { 
         data.push({ ...currentForm }); 
       } else { 
