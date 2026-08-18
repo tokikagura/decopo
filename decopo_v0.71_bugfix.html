@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>DEC●PO v0.71 (Bugfix Edition)</title>
+  
+  <!-- ★v0.71：v0.65eを基礎に、再生・MIDI・入力値まわりの不整合を修正 -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#000000">
+  
+  <!-- ★v0.65回帰パッチ：お上の規約通り、インライン呪文を完全損切りして本物の画像ファイルを参照！ -->
+  <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
+  
+  <style>
+    body { margin: 0; padding: 0; background: #000000; color: #00e5ff; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
+    .header { background: #000000; border-bottom: 2px solid #00e5ff; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
+    .logo { color: #ffea00; font-size: 16px; font-weight: bold; letter-spacing: 3px; text-shadow: 2px 2px #000000, -1px -1px #00e5ff66; font-family: 'Courier New', monospace; }
+    
+    .mode-btn { background: transparent; border: 1px solid #00e5ff; color: #00e5ff; padding: 4px 8px; cursor: pointer; font-size: 11px; font-weight: bold; }
+    .mode-btn.active { background: #00e5ff; color: #000000; }
+    .play-btn { background: transparent; border: 1px solid #ffea00; color: #ffea00; padding: 4px 10px; cursor: pointer; font-size: 11px; font-weight: bold; margin-left: auto; }
+    .play-btn.playing { background: #ffea00; color: #000000; }
+    .bpm-input { background: #000000; border: 1px solid #00e5ff; color: #00e5ff; width: 42px; padding: 4px; text-align: center; font-size: 12px; }
+    .file-bar { background: #000000; border-bottom: 1px solid #00e5ff44; padding: 4px 12px; display: flex; gap: 6px; font-size: 11px; justify-content: flex-start; align-items: center; }
+    
+    .gm-select-container { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #ffea00; margin-left: auto; }
+    .gm-patch-select { background: #000000; border: 1px solid #ffea00; color: #ffea00; font-size: 11px; padding: 2px; max-width: 140px; font-family: monospace; }
+    .gm-patch-select:disabled { border-color: #333; color: #555; }
+
+    .stgt-ctrl-bar { padding: 4px 12px; display: flex; gap: 6px; font-size: 10px; background: #000000; border-bottom: 1px solid #00e5ff22; align-items: center; }
+    .stgt-ctrl-bar .mode-btn { padding: 2px 6px; font-size: 10px; border-color: #333; color: #666; }
+    .stgt-ctrl-bar .mode-btn.active { border-color: #ffea00; color: #ffea00; background: #ffea0011; }
+    .track-bar { background: #000000; border-bottom: 2px solid #00e5ff22; padding: 4px 12px; display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .track-btn { background: #000000; border: 1px solid #00e5ff44; color: #00e5ff66; padding: 3px 8px; font-size: 10px; cursor: pointer; font-weight: bold; white-space: nowrap; }
+    .track-btn.active { background: #00e5ff22; color: #00e5ff; border-color: #00e5ff; }
+    .track-btn.drum-type.active { background: #ffea0022; color: #ffea00; border-color: #ffea00; }
+    .roll-container { max-width: 100vw; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .step-header { display: flex; padding-left: 68px; border-bottom: 1px solid #00e5ff22; width: max-content; }
+    .step-num { width: 28px; min-width: 28px; text-align: center; font-size: 9px; padding: 4px 0; color: #00e5ff66; }
+    .step-num.active-step { background: #ffea0033; color: #ffea00 !important; font-weight: bold; }
+    .grid-row { display: flex; align-items: center; border-bottom: 1px solid #00e5ff11; }
+    .note-label { width: 64px; min-width: 64px; text-align: right; padding-right: 8px; font-size: 10px; border-right: 1px solid #00e5ff22; }
+    .cell { width: 28px; min-width: 28px; height: 26px; cursor: pointer; border-left: 1px solid #111; box-sizing: border-box; }
+    .cell.active-column { background: #ffea0011 !important; }
+    
+    .stgt-container { padding: 0 0 280px 0; max-width: 100vw; overflow-x: auto; -webkit-overflow-scrolling: touch; display: none; }
+    .stgt-table { width: 480px; }
+    .stgt-header { display: grid; grid-template-columns: 24px 54px 46px 44px 44px 44px 34px 34px; border-bottom: 1px solid #00e5ff44; padding: 6px 8px; font-size: 10px; color: #00e5ff66; gap: 4px; }
+    .stgt-row { display: grid; grid-template-columns: 24px 54px 46px 44px 44px 44px 34px 34px; align-items: center; border-bottom: 1px solid #00e5ff11; padding: 6px 8px; gap: 4px; cursor: pointer; }
+    
+    .modal { position: fixed; bottom: 0; left: 0; right: 0; background: #000000; border-top: 2px solid #00e5ff; padding: 10px 12px 24px; z-index: 200; display: none; box-shadow: 0 -4px 20px #000000; }
+    .st-box { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
+    .st-btn { background: #000000; border: 1px solid #00e5ff44; color: #00e5ff66; padding: 4px 5px; font-size: 9px; cursor: pointer; }
+    .st-btn.active { background: #00e5ff; color: #000000; border-color: #00e5ff; }
+    .ok-btn { background: #ffea00; border: 1px solid #ffea00; color: #000000; padding: 4px 14px; font-size: 11px; font-weight: bold; cursor: pointer; }
+    .modal-label { color: #00e5ff66; font-size: 9px; display: block; margin-bottom: 2px; text-transform: uppercase; }
+    @media (orientation: landscape) {
+      .modal { top: 0; bottom: 0; left: auto; right: 0; width: 220px; border-top: none; border-left: 2px solid #00e5ff; padding: 8px 10px; height: 100vh; box-sizing: border-box; overflow-y: auto; }
+      .modal-main-row { flex-direction: column !important; align-items: stretch !important; gap: 6px !important; }
+      .modal-input-group { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+      .st-box { display: none !important; }
+      .stgt-container { padding-bottom: 40px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <span class="logo">DEC●PO</span>
+    <button id="btn-roll" class="mode-btn active" onclick="switchMode('roll')">ROLL</button>
+    <button id="btn-stgt" class="mode-btn" onclick="switchMode('stgt')">ST/GT</button>
+    <span style="color:#00e5ff66; font-size:9px; margin-left:4px;">BPM</span>
+    <input type="number" id="bpm-val" value="120" class="bpm-input" onchange="updateBpm()">
+    <button id="btn-play" class="play-btn" onclick="togglePlay()">▶ PLAY</button>
+  </div>
+
+  <!-- FILE Bar -->
+  <div class="file-bar">
+    <button class="mode-btn" style="border-color: #ffea00; color: #ffea00; padding: 2px 4px; font-size: 10px;" onclick="saveToFile()">💾 JSON</button>
+    <button class="mode-btn" style="border-color: #00e5ff; color: #00e5ff; padding: 2px 4px; font-size: 10px;" onclick="exportMidiFile()">🎹 MIDI</button>
+    <button class="mode-btn" style="border-color: #ff3d00; color: #ff3d00; padding: 2px 4px; font-size: 10px;" onclick="triggerLoad()">📂 LOAD</button>
+    <input type="file" id="file-loader" accept=".json" style="display: none;" onchange="loadFile(event)">
+    
+    <div class="gm-select-container">
+      <span>GM PATCH:</span>
+      <select id="gm-pc-select" class="gm-patch-select" onchange="updateTrackGmPatch(this.value)"></select>
+    </div>
+  </div>
+
+  <div id="stgt-playback-options" class="stgt-ctrl-bar" style="display: none;">
+    <span style="color: #00e5ff66;">TRACK:</span>
+    <button id="stgt-m-all" class="mode-btn active" onclick="setStgtPlayMode('all')">ALL TRK</button>
+    <button id="stgt-m-solo" class="mode-btn" onclick="setStgtPlayMode('solo')">SOLO</button>
+    <span style="color: #00e5ff66; margin-left: 6px;">RANGE:</span>
+    <button id="stgt-r-full" class="mode-btn active" onclick="setStgtRange('full')">FULL</button>
+    <button id="stgt-r-bar" class="mode-btn" onclick="setStgtRange('bar')">1-BAR LOOP</button>
+  </div>
+
+  <div class="track-bar" id="track-bar-content"></div>
+
+  <!-- Piano Roll View -->
+  <div id="view-roll" class="roll-container">
+    <div class="step-header" id="step-header-content"></div>
+    <div id="grid-content" style="overflow-y: auto; max-height: calc(100vh - 195px); width: max-content;"></div>
+  </div>
+
+  <!-- ST/GT View -->
+  <div id="view-stgt" class="stgt-container">
+    <div class="stgt-table">
+      <div class="stgt-header">
+        <div>#</div><div>NOTE</div><div>PC</div><div>ST</div><div>GT</div><div>VEL</div><div></div><div></div>
+      </div>
+      <div id="stgt-rows-content"></div>
+    </div>
+    <div style="padding: 12px;">
+      <button class="mode-btn" style="border-color:#00e5ff; color:#00e5ff;" onclick="openEdit('new')">+ ADD NOTE</button>
+    </div>
+  </div>
+
+  <!-- Editor Modal -->
+  <div id="edit-modal" class="modal">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #00e5ff44; padding-bottom: 4px;">
+        <span style="color: #00e5ff; font-size: 11px; font-weight: bold;">NOTE EDITOR</span>
+        <button style="background:none; border:none; color:#666; font-size:16px; cursor:pointer;" onclick="closeEdit()">✕</button>
+      </div>
+      
+      <div class="modal-main-row" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+        <div class="modal-input-group">
+          <span class="modal-label">NOTE</span>
+          <select id="modal-note" style="background: #000000; border: 1px solid #00e5ff44; color: #00e5ff; padding: 4px; font-size: 12px; width: 68px;"></select>
+        </div>
+
+        <div class="modal-input-group">
+          <span class="modal-label">PC</span>
+          <select id="modal-pc" style="background: #000000; border: 1px solid #00e5ff44; color: #ffea00; padding: 4px; font-size: 11px; width: 65px;"></select>
+        </div>
+        
+        <div class="modal-input-group">
+          <span class="modal-label">ST</span>
+          <input type="number" id="modal-st" class="bpm-input" inputmode="numeric" pattern="[0-9]*" min="0" step="1" oninput="syncFormSt(this.value)">
+        </div>
+
+        <div class="modal-input-group">
+          <span class="modal-label">GT</span>
+          <input type="number" id="modal-gt" class="bpm-input" inputmode="numeric" pattern="[0-9]*" min="0" step="1">
+        </div>
+
+        <div class="modal-input-group">
+          <span class="modal-label">VEL</span>
+          <input type="number" id="modal-vel" class="bpm-input" inputmode="numeric" pattern="[0-9]*" min="0" max="127" step="1">
+        </div>
+
+        <button class="ok-btn" onclick="commitEdit()" style="margin-left: auto;">OK</button>
+      </div>
+
+      <div id="vertical-st-box">
+        <div id="modal-st-label" style="color: #00e5ff66; font-size: 9px; margin-bottom: 2px;">ST: 96</div>
+        <div class="st-box" id="st-options-box"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const BLACK_NOTES = ["C#", "D#", "F#", "G#", "A#"];
+    const ST_OPTIONS = [0, 6, 12, 16, 18, 24, 32, 36, 48, 64, 72, 96, 144, 192, 384];
+    const ST_LABELS = { 
+      0: "和音(ST0)", 6: "64分音符", 12: "32分音符", 16: "3連16分", 18: "付点32分", 
+      24: "16分音符", 32: "3連8分", 36: "付点16分", 48: "8分音符", 64: "3連4分", 
+      72: "付点8分", 96: "4分音符", 144: "付点4分", 192: "2分音符", 384: "全音符" 
+    };
+
+    const ALL_NOTES = [];
+    for (let oct = 5; oct >= 3; oct--) {
+      const scaleHighToLow = ["B", "A#", "A", "G#", "G", "F#", "F", "E", "D#", "D", "C#", "C"];
+      scaleHighToLow.forEach(n => ALL_NOTES.push(n + oct));
+    }
+
+    const TRACKS = Array(16).fill(null).map((_, i) => {
+      let pc = 1; 
+      if (i === 2) pc = 33;      // CH3: Fingered Bass
+      if (i === 3) pc = 49;      // CH4: String Ensemble 1
+      if (i === 5) pc = 57;      // CH6: Trumpet
+      if (i === 7) pc = 74;      // CH8: Flute
+      if (i === 11) pc = 89;     // CH12: Pad 1
+      return { name: `CH${i+1}`, type: (i === 9 ? "drum" : "synth"), pc: pc, initPc: pc };
+    });
+    
+    const GM_LABELS = {
+      1:"1:Piano", 2:"2:Bright Pno", 5:"5:Tine E.Pno", 17:"17:Drawbar Org", 25:"25:Steel Gtr", 
+      33:"33:Finger Bass", 36:"36:Fretless Bass", 41:"41:Violin", 49:"49:Strings 1", 53:"53:Choir Aahs",
+      57:"57:Trumpet", 61:"61:Brass Sect", 66:"66:Alto Sax", 74:"74:Flute", 81:"81:Square Lead", 
+      82:"82:Saw Lead", 89:"89:Pad 1(Warm)", 105:"105:Sitar"
+    };
+
+    const DRUM_TYPES = ["OH", "CH", "SD", "BD"];
+    let currentTrackIdx = 0;
+    let totalSteps = 32; 
+
+    let synthTracksData = Array(16).fill(null).map(() => Object.fromEntries(ALL_NOTES.map(n => [n, Array(totalSteps).fill(false)])));
+    let drumTrackData = Object.fromEntries(DRUM_TYPES.map(d => [d, Array(totalSteps).fill(false)]));
+    let stgtTracksData = Array(16).fill(null).map(() => []);
+    
+    let currentEditIdx = null;
+    let currentForm = { note: "C4", st: 96, gt: 72, vel: 100, pc: 0 }; 
+
+    let audioCtx = null;
+    let noiseBuffer = null; 
+    let isPlaying = false;
+    
+    let currentStep = 0;   
+    let timerId = null;    
+    
+    let stgtPlayMode = 'all'; 
+    let stgtRange = 'full';   
+    let stgtIndices = Array(16).fill(0);
+    let stgtTimerIds = Array(16).fill(null);
+    let stgtAccumSt = Array(16).fill(0); 
+    let stgtLastPlayedIndex = Array(16).fill(-1);
+
+    function buildGmPatchSelect() {
+      const select = document.getElementById('gm-pc-select');
+      let options = "";
+      for (let i in GM_LABELS) {
+        options += `<option value="${i}">${GM_LABELS[i]}</option>`;
+      }
+      select.innerHTML = options;
+    }
+
+    function updateTrackGmPatch(val) {
+      if (TRACKS[currentTrackIdx].type !== "drum") {
+        TRACKS[currentTrackIdx].initPc = Number(val);
+        TRACKS[currentTrackIdx].pc = Number(val);
+      }
+    }
+
+    function buildTrackBar() {
+      const bar = document.getElementById('track-bar-content');
+      bar.innerHTML = TRACKS.map((t, idx) => {
+        const isDrum = t.type === "drum";
+        return `<button id="tk-btn-${idx}" class="track-btn ${isDrum ? 'drum-type' : ''} ${idx === currentTrackIdx ? 'active' : ''}" onclick="switchTrack(${idx})">${t.name}</button>`;
+      }).join('');
+    }
+
+    function switchTrack(idx) {
+      currentTrackIdx = idx;
+      buildTrackBar();
+      buildPianoRoll();
+      
+      const gmSelect = document.getElementById('gm-pc-select');
+      if (TRACKS[idx].type === "drum") {
+        gmSelect.innerHTML = `<option value="10">10:GM Drumset</option>`;
+        gmSelect.disabled = true;
+      } else {
+        buildGmPatchSelect();
+        gmSelect.value = TRACKS[idx].initPc; 
+        gmSelect.disabled = false;
+      }
+
+      if(document.getElementById('view-stgt').style.display === 'block') renderStgtTable();
+    }
+
+    function switchMode(mode) {
+      document.getElementById('btn-roll').classList.toggle('active', mode === 'roll');
+      document.getElementById('btn-stgt').classList.toggle('active', mode === 'stgt');
+      document.getElementById('view-roll').style.display = mode === 'roll' ? 'block' : 'none';
+      document.getElementById('view-stgt').style.display = mode === 'stgt' ? 'block' : 'none';
+      document.getElementById('stgt-playback-options').style.display = mode === 'stgt' ? 'flex' : 'none';
+      if(mode === 'stgt') renderStgtTable();
+    }
+
+    function setStgtPlayMode(m) {
+      stgtPlayMode = m;
+      document.getElementById('stgt-m-all').classList.toggle('active', m === 'all');
+      document.getElementById('stgt-m-solo').classList.toggle('active', m === 'solo');
+      if (isPlaying) { togglePlay(); togglePlay(); } 
+    }
+
+    function setStgtRange(r) {
+      stgtRange = r;
+      document.getElementById('stgt-r-full').classList.toggle('active', r === 'full');
+      document.getElementById('stgt-r-bar').classList.toggle('active', r === 'bar');
+      if (isPlaying) { togglePlay(); togglePlay(); }
+    }
+
+    function checkAndAppendBar(e) {
+      const el = e.target;
+      if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 50) {
+        const prevScrollLeft = el.scrollLeft;
+        for (let t = 0; t < 16; t++) {
+          ALL_NOTES.forEach(note => { if(synthTracksData[t][note]) synthTracksData[t][note].push(...Array(16).fill(false)); });
+        }
+        DRUM_TYPES.forEach(type => { drumTrackData[type].push(...Array(16).fill(false)); });
+        totalSteps += 16;
+        buildPianoRoll();
+        el.scrollLeft = prevScrollLeft;
+      }
+    }
+
+    function buildPianoRoll() {
+      const header = document.getElementById('step-header-content');
+      header.innerHTML = Array(totalSteps).fill(0).map((_, i) => {
+        const isBarStart = i % 16 === 0; const isBeatStart = i % 4 === 0;
+        let color = isBarStart ? '#ffea00' : (isBeatStart ? '#00e5ff' : '#333');
+        let border = isBarStart ? '1px solid #ffea0044' : (isBeatStart ? '1px solid #00e5ff22' : '1px solid #111');
+        return `<div class="step-num" id="header-step-${i}" style="color: ${color}; border-left: ${border}">${i + 1}</div>`;
+      }).join('');
+
+      const grid = document.getElementById('grid-content');
+      const isDrum = TRACKS[currentTrackIdx].type === "drum";
+
+      if (!isDrum) {
+        grid.innerHTML = ALL_NOTES.map(note => {
+          const isBlack = BLACK_NOTES.includes(note.replace(/\d/, "")); const isC = note.startsWith("C") && !note.includes("#");
+          return `
+            <div class="grid-row" style="border-bottom: ${isC ? '1px solid #00e5ff33' : '1px solid #111'}; background: ${isBlack ? '#05050a' : '#000000'};">
+              <div class="note-label" style="color: ${isBlack ? '#ff3d00' : (isC ? '#ffea00' : '#00e5ff88')};">${note}</div>
+              ${Array(totalSteps).fill(0).map((_, step) => {
+                const isActive = synthTracksData[currentTrackIdx][note] && synthTracksData[currentTrackIdx][note][step];
+                let bg = step % 4 === 0 ? '#0a0a0a' : 'transparent'; let shadow = 'none';
+                if (isActive) { bg = '#00e5ff'; shadow = `0 0 8px #00e5ffcc`; }
+                let cellBorderLeft = step % 16 === 0 ? '1px solid #ffea0033' : (step % 4 === 0 ? '1px solid #00e5ff11' : '1px solid #111');
+                return `<div class="cell" id="cell-${note}-${step}" onclick="toggleCell('${note}', ${step})" style="background: ${bg}; box-shadow: ${shadow}; border-left: ${cellBorderLeft};"></div>`;
+              }).join('')}
+            </div>
+          `;
+        }).join('');
+      } else {
+        grid.innerHTML = DRUM_TYPES.map(type => {
+          return `
+            <div class="grid-row" style="border-bottom: 1px solid #ffea0022; background: #000000; height: 32px;">
+              <div class="note-label" style="color: #ffea00; font-weight: bold;">${type}</div>
+              ${Array(totalSteps).fill(0).map((_, step) => {
+                const isActive = drumTrackData[type] && drumTrackData[type][step];
+                let bg = step % 4 === 0 ? '#0a0a0a' : 'transparent'; let shadow = 'none';
+                if (isActive) { bg = '#ffea00'; shadow = `0 0 8px #ffea00cc`; }
+                let cellBorderLeft = step % 16 === 0 ? '1px solid #ffea0033' : (step % 4 === 0 ? '1px solid #00e5ff11' : '1px solid #111');
+                return `<div class="cell" id="cell-${type}-${step}" onclick="toggleCell('${type}', ${step})" style="background: ${bg}; box-shadow: ${shadow}; height:32px; border-left: ${cellBorderLeft};"></div>`;
+              }).join('')}
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    function hasDetailedStgtData(tIdx) {
+      const data = stgtTracksData[tIdx] || [];
+      const isDrum = TRACKS[tIdx].type === "drum";
+
+      for (const row of data) {
+        const st = Number(row.st) || 0;
+        const gt = Number(row.gt) || 0;
+        const vel = Number(row.vel) || 0;
+        const pc = Number(row.pc) || 0;
+
+        // ROLLから安全に再生成できる標準値以外は、ST/GT側の詳細情報として保護する。
+        if (pc > 0) return true;
+
+        if (row.note && row.note !== "REST") {
+          if (isDrum && !DRUM_TYPES.includes(row.note)) return true;
+          if (st !== 0 && st !== 24) return true;
+          if (gt !== 18) return true;
+          if (vel !== 100) return true;
+        } else if (row.note === "REST") {
+          if (st < 0 || st % 24 !== 0) return true;
+        }
+      }
+      return false;
+    }
+
+    function toggleCell(key, step) {
+      const isDrum = TRACKS[currentTrackIdx].type === "drum";
+
+      // ST/GTで作ったGT・VEL・PC・細分STを、ROLL編集で黙って消さない。
+      // ドラムも同じ保護ルールを使う。
+      if (hasDetailedStgtData(currentTrackIdx)) {
+        alert("ST/GTの詳細データを保護するため、このトラックのROLL編集は停止しました。ST/GT画面で編集してください。");
+        return;
+      }
+
+      if (!isDrum) {
+        synthTracksData[currentTrackIdx][key][step] = !synthTracksData[currentTrackIdx][key][step];
+      } else {
+        drumTrackData[key][step] = !drumTrackData[key][step];
+      }
+      gridDataToStgt(currentTrackIdx);
+      buildPianoRoll();
+    }
+
+    function gridDataToStgt(tIdx) {
+      stgtTracksData[tIdx] = [];
+      let accumSt = 0;
+      const isDrum = TRACKS[tIdx].type === "drum";
+
+      for (let step = 0; step < totalSteps; step++) {
+        let activeNotesInStep = [];
+        if (isDrum) {
+          DRUM_TYPES.forEach(type => { if (drumTrackData[type] && drumTrackData[type][step]) activeNotesInStep.push(type); });
+        } else {
+          ALL_NOTES.forEach(note => { if (synthTracksData[tIdx][note] && synthTracksData[tIdx][note][step]) activeNotesInStep.push(note); });
+        }
+
+        if (activeNotesInStep.length > 0) {
+          if (accumSt > 0) { stgtTracksData[tIdx].push({ note: "REST", stroke: accumSt, st: accumSt, gt: 0, vel: 0, pc: 0 }); accumSt = 0; }
+          activeNotesInStep.forEach((nt, nIdx) => {
+            let isLast = nIdx === activeNotesInStep.length - 1;
+            stgtTracksData[tIdx].push({ note: nt, st: isLast ? 24 : 0, gt: 18, vel: 100, pc: 0 });
+          });
+        } else {
+          accumSt += 24;
+        }
+      }
+      if (accumSt > 0) { stgtTracksData[tIdx].push({ note: "REST", stroke: accumSt, st: accumSt, gt: 0, vel: 0, pc: 0 }); }
+    }
+
+    function stgtDataToGrid(tIdx) {
+      const isDrum = TRACKS[tIdx].type === "drum";
+
+      if (isDrum) {
+        DRUM_TYPES.forEach(type => { drumTrackData[type] = Array(totalSteps).fill(false); });
+      } else {
+        ALL_NOTES.forEach(note => {
+          synthTracksData[tIdx][note] = Array(totalSteps).fill(false);
+        });
+      }
+
+      let currentClock = 0;
+      const data = stgtTracksData[tIdx];
+      if (!data) return;
+
+      data.forEach(row => {
+        if (row.note && row.note !== "REST") {
+          let step = Math.floor(currentClock / 24);
+          while (step >= totalSteps) {
+            for (let t = 0; t < 16; t++) {
+              ALL_NOTES.forEach(n => { if(synthTracksData[t][n]) synthTracksData[t][n].push(...Array(16).fill(false)); });
+            }
+            DRUM_TYPES.forEach(type => { drumTrackData[type].push(...Array(16).fill(false)); });
+            totalSteps += 16;
+          }
+
+          if (isDrum) {
+            if (DRUM_TYPES.includes(row.note) && drumTrackData[row.note]) {
+              drumTrackData[row.note][step] = true;
+            }
+          } else if (synthTracksData[tIdx][row.note]) {
+            synthTracksData[tIdx][row.note][step] = true;
+          }
+        }
+        currentClock += Number(row.st) || 0;
+      });
+    }
+
+    function getSafeBpm() {
+      const el = document.getElementById('bpm-val');
+      let bpm = Number(el.value);
+      if (!Number.isFinite(bpm) || bpm <= 0) bpm = 120;
+      bpm = Math.max(20, Math.min(400, Math.round(bpm)));
+      el.value = bpm;
+      return bpm;
+    }
+
+    function saveToFile() {
+      const bpm = getSafeBpm();
+      const songData = { version: "v0.71", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData, tracksConfig: TRACKS.map(t=>t.initPc) };
+      const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob); const a = document.createElement('a');
+      a.href = url; a.download = `decopo_v071_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+    }
+
+    function triggerLoad() { document.getElementById('file-loader').click(); }
+
+    function loadFile(event) {
+      const file = event.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const songData = JSON.parse(e.target.result);
+          if (songData.bpm) { document.getElementById('bpm-val').value = songData.bpm; updateBpm(); }
+          const hasSynthData = Array.isArray(songData.synthTracksData);
+          const hasStgtData = Array.isArray(songData.stgtTracksData);
+
+          if (hasSynthData) { 
+            synthTracksData = songData.synthTracksData; 
+            totalSteps = (songData.synthTracksData[0] && songData.synthTracksData[0]["C4"])
+              ? songData.synthTracksData[0]["C4"].length
+              : (songData.synthTracksData[0] && Object.values(songData.synthTracksData[0])[0]
+                  ? Object.values(songData.synthTracksData[0])[0].length
+                  : 32);
+          }
+          if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
+          if (hasStgtData) stgtTracksData = songData.stgtTracksData;
+          if (songData.tracksConfig) { songData.tracksConfig.forEach((pc, idx) => { if(TRACKS[idx]) { TRACKS[idx].initPc = pc; TRACKS[idx].pc = pc; } }); }
+
+          if (hasStgtData) {
+            // 新形式：ST/GT詳細データを正本としてROLL表示を再構築する。
+            // v0.65以前のJSONでは、ドラムROLLだけ存在しST/GT(CH10)が空のことがあるため保護する。
+            const drumStgtHasRows = Array.isArray(stgtTracksData[9]) && stgtTracksData[9].length > 0;
+            const drumGridHasHits = !!songData.drumTrackData && DRUM_TYPES.some(type =>
+              Array.isArray(songData.drumTrackData[type]) && songData.drumTrackData[type].some(Boolean)
+            );
+
+            for (let t = 0; t < 16; t++) {
+              if (t !== 9) stgtDataToGrid(t);
+            }
+            if (drumStgtHasRows) {
+              stgtDataToGrid(9);
+            } else if (drumGridHasHits) {
+              // 旧ドラムROLLを消さず、そこからST/GT標準データを生成する。
+              gridDataToStgt(9);
+            } else {
+              stgtDataToGrid(9);
+            }
+          } else if (hasSynthData) {
+            // 旧形式：ROLLデータを消さず、読み込んだROLLからST/GTの標準データを新規生成する。
+            // 現在セッションの古いST/GTデータを混ぜないため、先に空配列へ初期化する。
+            stgtTracksData = Array(16).fill(null).map(() => []);
+            for (let t = 0; t < 16; t++) { gridDataToStgt(t); }
+          }
+
+          switchTrack(0); alert("JSONデータの安全な同期完了でやんす！");
+        } catch (err) { alert("解析失敗でやんす。"); }
+      };
+      reader.readAsText(file); event.target.value = '';
+    }
+
+    function noteToMidi(note) {
+      if(note === "REST") return 0;
+      const scale = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+      const match = note.match(/^([A-G]#?)(\d)$/); if (!match) return 60;
+      return 12 * (parseInt(match[2], 10) + 1) + scale.indexOf(match[1]);
+    }
+
+    function toVLQ(num) {
+      let buffer = []; let n = num; buffer.push(n & 0x7F); n >>>= 7;
+      while (n > 0) { buffer.push((n & 0x7F) | 0x80); n >>>= 7; }
+      return buffer.reverse();
+    }
+
+    function exportMidiFile() {
+      const header = [0x4D, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x60]; 
+      let midiEvents = []; 
+
+      for (let t = 0; t < 16; t++) {
+        if (t === 9) continue; 
+        midiEvents.push({ time: 0, type: (0xC0 + t), note: (TRACKS[t].initPc - 1), vel: 0, isPc: true });
+      }
+
+      for (let t = 0; t < 16; t++) {
+        if (TRACKS[t].type === "drum") continue; 
+        let currentClock = 0;
+        if (stgtTracksData[t]) {
+          stgtTracksData[t].forEach(row => {
+            if (row.pc && row.pc > 0) {
+              midiEvents.push({ time: currentClock, type: (0xC0 + t), note: (row.pc - 1), vel: 0, isPc: true });
+            }
+            if (row.note && row.note !== "REST") {
+              const midiNum = noteToMidi(row.note);
+              const rawVel = Number(row.vel);
+              const velVal = Number.isFinite(rawVel) ? Math.max(0, Math.min(127, Math.round(rawVel))) : 100;
+              midiEvents.push({ time: currentClock, type: (0x90 + t), note: midiNum, vel: velVal });
+              midiEvents.push({ time: (currentClock + row.gt), type: (0x80 + t), note: midiNum, vel: 0 });
+            }
+            currentClock += row.st;
+          });
+        }
+      }
+
+      const drumMidiMap = { "BD": 36, "SD": 38, "CH": 42, "OH": 46 };
+      const drumStgt = stgtTracksData[9] || [];
+
+      if (drumStgt.length > 0) {
+        // CH10もST/GTを正本として書き出し、GT・VEL・細分STを保持する。
+        let currentClock = 0;
+        drumStgt.forEach(row => {
+          if (row.note && row.note !== "REST" && drumMidiMap[row.note]) {
+            const midiNum = drumMidiMap[row.note];
+            const rawVel = Number(row.vel);
+            const velVal = Number.isFinite(rawVel) ? Math.max(0, Math.min(127, Math.round(rawVel))) : 100;
+            const rawGt = Number(row.gt);
+            const gtVal = Number.isFinite(rawGt) ? Math.max(0, Math.round(rawGt)) : 12;
+            midiEvents.push({ time: currentClock, type: 0x99, note: midiNum, vel: velVal });
+            midiEvents.push({ time: currentClock + gtVal, type: 0x89, note: midiNum, vel: 0 });
+          }
+          currentClock += Number(row.st) || 0;
+        });
+      } else {
+        // 旧データ互換用フォールバック。
+        DRUM_TYPES.forEach(type => {
+          const midiNum = drumMidiMap[type];
+          for (let step = 0; step < totalSteps; step++) {
+            if (drumTrackData[type] && drumTrackData[type][step]) {
+              const onTime = step * 24;
+              const offTime = onTime + 12;
+              midiEvents.push({ time: onTime, type: 0x99, note: midiNum, vel: 100 });
+              midiEvents.push({ time: offTime, type: 0x89, note: midiNum, vel: 0 });
+            }
+          }
+        });
+      }
+
+      midiEvents.sort((a, b) => {
+        if (a.time !== b.time) return a.time - b.time;
+        if (a.isPc && !b.isPc) return -1;
+        if (!a.isPc && b.isPc) return 1;
+        return a.type - b.type;
+      });
+
+      let trackData = []; let lastTime = 0;
+      const bpm = getSafeBpm();
+      const microsecondsPerBeat = Math.round(60000000 / bpm);
+      trackData.push(0x00, 0xFF, 0x51, 0x03, (microsecondsPerBeat >> 16) & 0xFF, (microsecondsPerBeat >> 8) & 0xFF, microsecondsPerBeat & 0xFF);
+
+      midiEvents.forEach(ev => {
+        let delta = ev.time - lastTime; lastTime = ev.time;
+        trackData.push(...toVLQ(delta));
+        if (ev.isPc) {
+          trackData.push(ev.type, ev.note); 
+        } else {
+          trackData.push(ev.type, ev.note, ev.vel);
+        }
+      });
+      trackData.push(0x00, 0xFF, 0x2F, 0x00); 
+
+      const trkLen = trackData.length;
+      const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
+      const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
+      const url = URL.createObjectURL(midiBlob); const a = document.createElement('a');
+      a.href = url; a.download = `decopo_v071_track_${Date.now()}.mid`; a.click(); URL.revokeObjectURL(url);
+    }
+
+    function noteToFreq(note) {
+      const scale = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+      const match = note.match(/^([A-G]#?)(\d)$/); if (!match) return 440;
+      const midi = 12 * (parseInt(match[2], 10) + 1) + scale.indexOf(match[1]);
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+
+    function playToneWithGm(note, trackIdx, duration, velocity = 100) {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      let freq = noteToFreq(note);
+      const pc = TRACKS[trackIdx].pc;
+      const rawVelocity = Number(velocity);
+      const vel = Number.isFinite(rawVelocity) ? Math.max(0, Math.min(127, rawVelocity)) : 100;
+      const velScale = vel / 127;
+
+      if (pc >= 33 && pc <= 40) { freq = freq / 2; }
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      if (pc >= 1 && pc <= 8) { osc.type = "sine"; }              
+      else if (pc >= 25 && pc <= 32) { osc.type = "sawtooth"; }    
+      else if (pc >= 33 && pc <= 40) { osc.type = "triangle"; }    
+      else if (pc >= 41 && pc <= 56) { osc.type = "sawtooth"; }    
+      else if (pc >= 57 && pc <= 64) { osc.type = "square"; }      
+      else { osc.type = "square"; }                               
+      
+      osc.frequency.value = freq;
+
+      if (pc >= 1 && pc <= 8) {
+        gain.gain.setValueAtTime(0.25 * velScale, now);
+        gain.gain.linearRampToValueAtTime(0.001 * velScale, now + duration);
+      } else if (pc >= 41 && pc <= 56) {
+        let attack = Math.min(0.12, duration * 0.3);
+        gain.gain.setValueAtTime(0.0, now);
+        gain.gain.linearRampToValueAtTime(0.22 * velScale, now + attack);
+        gain.gain.setValueAtTime(0.22 * velScale, now + Math.max(attack, duration - 0.05));
+        gain.gain.linearRampToValueAtTime(0.001 * velScale, now + duration);
+      } else if (pc >= 33 && pc <= 40) {
+        gain.gain.setValueAtTime(0.3 * velScale, now);
+        gain.gain.linearRampToValueAtTime(0.05 * velScale, now + duration);
+      } else {
+        gain.gain.setValueAtTime(0.18 * velScale, now);
+        gain.gain.linearRampToValueAtTime(0.001 * velScale, now + duration);
+      }
+
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(now); osc.stop(now + duration + 0.05);
+    }
+
+    function playDrum(type, duration = 0.15, velocity = 100) {
+      if (!audioCtx) return; const now = audioCtx.currentTime;
+      const rawVelocity = Number(velocity);
+      const vel = Number.isFinite(rawVelocity) ? Math.max(0, Math.min(127, rawVelocity)) : 100;
+      const velScale = vel / 127;
+      if (!noiseBuffer) {
+        const bufferSize = audioCtx.sampleRate * 0.4; noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = noiseBuffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
+      }
+      if (type === "BD") {
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = "sine"; osc.frequency.setValueAtTime(140, now); osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.12);
+        gain.gain.setValueAtTime(0.6 * velScale, now); gain.gain.linearRampToValueAtTime(0.001 * velScale, now + 0.14);
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + 0.15);
+      } else {
+        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain(); 
+        let d = duration;
+        if (type === "CH") { gain.gain.setValueAtTime(0.22 * velScale, now); d = 0.03; }
+        else if (type === "OH") { gain.gain.setValueAtTime(0.2 * velScale, now); d = Math.max(0.2, duration); }
+        else { gain.gain.setValueAtTime(0.3 * velScale, now); d = 0.18; }
+        gain.gain.linearRampToValueAtTime(0.001 * velScale, now + d);
+        source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + d + 0.01);
+      }
+    }
+
+    function togglePlay() {
+      const btn = document.getElementById('btn-play');
+      if (isPlaying) { 
+        isPlaying = false; btn.innerText = "▶ PLAY"; btn.classList.remove('playing'); 
+        if (timerId) clearInterval(timerId); 
+        stgtTimerIds.forEach(tid => { if(tid) clearTimeout(tid); }); stgtTimerIds.fill(null);
+        stgtLastPlayedIndex.fill(-1); clearHighlight(); 
+        if (audioCtx) { try { audioCtx.close(); } catch(e) {} audioCtx = null; }
+        
+        TRACKS.forEach(t => t.pc = t.initPc);
+        const gmSelect = document.getElementById('gm-pc-select');
+        if (TRACKS[currentTrackIdx].type !== "drum") gmSelect.value = TRACKS[currentTrackIdx].initPc;
+      } 
+      else { 
+        if (audioCtx) { try { audioCtx.close(); } catch(e) {} audioCtx = null; }
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        noiseBuffer = null;
+
+        TRACKS.forEach(t => t.pc = t.initPc);
+
+        try {
+          const oscUnlock = audioCtx.createOscillator(); const gainUnlock = audioCtx.createGain();
+          gainUnlock.gain.setValueAtTime(0.0001, audioCtx.currentTime); 
+          oscUnlock.connect(gainUnlock); gainUnlock.connect(audioCtx.destination);
+          oscUnlock.start(0); oscUnlock.stop(0.001);
+        } catch(e) {}
+
+        isPlaying = true; btn.innerText = "■ STOP"; btn.classList.add('playing'); 
+        let isRollMode = document.getElementById('btn-roll').classList.contains('active');
+
+        // 細分ST・GT・VEL・PCを含む曲はROLL再生だと情報が落ちるため、
+        // 自動的にST/GT再生へ切り替える。
+        const hasAnyDetailedData = stgtTracksData.some((_, t) => hasDetailedStgtData(t));
+        if (isRollMode && hasAnyDetailedData) {
+          switchMode('stgt');
+          isRollMode = false;
+        }
+
+        if (isRollMode) { currentStep = 0; runSequencer(); } 
+        else {
+          stgtIndices.fill(0); stgtAccumSt.fill(0); stgtLastPlayedIndex.fill(-1);
+          if (stgtPlayMode === 'solo') { runStgtSequencer(currentTrackIdx); } 
+          else { for (let t = 0; t < 16; t++) { runStgtSequencer(t); } }
+        }
+      }
+    }
+
+    function updateBpm() { getSafeBpm(); if (isPlaying) { if (timerId) { clearInterval(timerId); runSequencer(); } } }
+    
+    function runSequencer() {
+      const bpm = getSafeBpm(); const interval = (60 / bpm / 4) * 1000;
+      const stepExecution = () => {
+        clearHighlight();
+        const headerCell = document.getElementById(`header-step-${currentStep}`); if (headerCell) headerCell.classList.add('active-step');
+        const stepSec = (60 / bpm / 4);
+
+        for (let t = 0; t < 16; t++) {
+          if (t === 9) continue;
+          ALL_NOTES.forEach(note => { if (synthTracksData[t] && synthTracksData[t][note] && synthTracksData[t][note][currentStep]) { playToneWithGm(note, t, stepSec * 0.9); } });
+        }
+        if (drumTrackData["OH"] && drumTrackData["OH"][currentStep]) playDrum("OH", stepSec);
+        if (drumTrackData["CH"] && drumTrackData["CH"][currentStep]) playDrum("CH", stepSec);
+        if (drumTrackData["SD"] && drumTrackData["SD"][currentStep]) playDrum("SD", stepSec);
+        if (drumTrackData["BD"] && drumTrackData["BD"][currentStep]) playDrum("BD", stepSec);
+
+        const isDrum = TRACKS[currentTrackIdx].type === "drum";
+        if (!isDrum) {
+          ALL_NOTES.forEach(note => { const cell = document.getElementById(`cell-${note}-${currentStep}`); if (cell) cell.classList.add('active-column'); });
+        } else {
+          DRUM_TYPES.forEach(type => { const cell = document.getElementById(`cell-${type}-${currentStep}`); if (cell) cell.classList.add('active-column'); });
+        }
+        currentStep = (currentStep + 1) % totalSteps;
+      };
+      stepExecution(); timerId = setInterval(stepExecution, interval);
+    }
+
+    function resetTrackPcAtLoopStart(t) {
+      TRACKS[t].pc = TRACKS[t].initPc;
+      if (t === currentTrackIdx && TRACKS[t].type !== "drum") {
+        document.getElementById('gm-pc-select').value = TRACKS[t].initPc;
+      }
+    }
+
+    function runStgtSequencer(t) {
+      const data = stgtTracksData[t]; if (data.length === 0) return;
+      const stepExecution = () => {
+        if (!isPlaying) return;
+        const bpm = getSafeBpm(); const unitTime = (60 / bpm) / 96; 
+        let idx = stgtIndices[t]; let totalDelay = 0; let loopCount = 0;
+
+        // v0.65d: each ST/GT loop starts from the track's initial Program Change.
+        // A PC event on row 0 can immediately override this value.
+        if (idx === 0) resetTrackPcAtLoopStart(t);
+
+        while (isPlaying) {
+          if (idx >= data.length || loopCount > 64) { idx = 0; stgtAccumSt[t] = 0; if (data.length === 0 || loopCount > 0) break; }
+          const row = data[idx]; if (!row) break;
+          stgtLastPlayedIndex[t] = idx;
+
+          if (row.pc && row.pc > 0) {
+            TRACKS[t].pc = row.pc;
+            if (t === currentTrackIdx) {
+              document.getElementById('gm-pc-select').value = row.pc; 
+            }
+          }
+
+          if (row.note && row.note !== "REST") { 
+            const duration = row.gt * unitTime; 
+            if(TRACKS[t].type === "drum") { playDrum(row.note, duration, row.vel); } else { playToneWithGm(row.note, t, duration, row.vel); }
+          }
+          totalDelay += row.st * unitTime * 1000; let nextIdx = (idx + 1) % data.length;
+          
+          if (stgtRange === 'bar') { 
+            stgtAccumSt[t] += row.st; 
+            if (stgtAccumSt[t] >= 384 || nextIdx === 0) { 
+              nextIdx = 0; 
+              stgtAccumSt[t] = 0; 
+            } 
+          } else { 
+            stgtAccumSt[t] = 0; 
+          }
+          idx = nextIdx; loopCount++;
+          if (row.st > 0) break;
+        }
+        stgtIndices[t] = idx;
+        if (t === currentTrackIdx && document.getElementById('view-stgt').style.display === 'block') { renderStgtTable(); }
+        if (totalDelay === 0) totalDelay = 50; stgtTimerIds[t] = setTimeout(stepExecution, totalDelay);
+      };
+      stepExecution();
+    }
+
+    function clearHighlight() {
+      for (let i = 0; i < totalSteps; i++) { const hc = document.getElementById(`header-step-${i}`); if (hc) hc.classList.remove('active-step'); }
+      if(document.getElementById('view-stgt').style.display === 'block') renderStgtTable();
+    }
+
+    function renderStgtTable() {
+      const container = document.getElementById('stgt-rows-content'); const isStgtMode = document.getElementById('btn-stgt').classList.contains('active'); const data = stgtTracksData[currentTrackIdx];
+      container.innerHTML = data.map((row, i) => {
+        const isCurrent = isPlaying && isStgtMode && (stgtLastPlayedIndex[currentTrackIdx] === i);
+        let bg = isCurrent ? '#ffea0022' : (currentEditIdx === i ? '#222222' : 'transparent'); let color = isCurrent ? '#ffea00' : '#00e5ff'; let border = isCurrent ? '1px solid #ffea00bb' : '1px solid #111';
+        let noteColor = (row.note === "REST") ? "#ff3d00" : (BLACK_NOTES.includes(row.note.replace(/\d/,"")) ? '#ffea00' : '#00e5ff'); if (isCurrent) noteColor = '#ffea00';
+        
+        let pcLabel = row.pc && row.pc > 0 ? row.pc : "-";
+        let pcColor = row.pc > 0 ? "#ffea00" : "#333";
+
+        return `
+          <div class="stgt-row" onclick="openEdit(${i})" style="background: ${bg}; color: ${color}; border-bottom: ${border};">
+            <div style="color: #333; font-size: 9px;">${i + 1}</div>
+            <div style="color: ${noteColor}; font-size: 11px; font-weight: bold;">${row.note}</div>
+            <div style="color: ${pcColor}; font-size: 11px; font-weight: ${row.pc > 0 ? 'bold' : 'normal'}; text-align:center;">${pcLabel}</div>
+            <div style="font-size: 11px; color: ${row.st === 0 ? '#ffea00' : 'inherit'};">${row.st}</div>
+            <div style="font-size: 11px; opacity: 0.6;">${row.gt}</div>
+            <div style="font-size: 11px; opacity: 0.6;">${row.vel}</div>
+            <div onclick="event.stopPropagation(); insertAfter(${i});" style="color: #00e5ff66; font-size: 16px;">+</div>
+            <div onclick="event.stopPropagation(); deleteRow(${i});" style="color: #ff335566; font-size: 12px;">✕</div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    function buildModalSelect() { 
+      let options = `<option value="REST" style="color:#ff3d00;">REST (休符)</option>`;
+      if (TRACKS[currentTrackIdx].type === "drum") {
+        options += DRUM_TYPES.map(d => `<option value="${d}">${d}</option>`).join('');
+      } else {
+        options += ALL_NOTES.map(n => `<option value="${n}">${n}</option>`).join('');
+      }
+      document.getElementById('modal-note').innerHTML = options; 
+      document.getElementById('modal-note').value = TRACKS[currentTrackIdx].type === "drum" ? "BD" : "C4";
+    }
+
+    function buildModalPcSelect() {
+      const select = document.getElementById('modal-pc');
+      let options = `<option value="0">--</option>`;
+      for (let i in GM_LABELS) {
+        options += `<option value="${i}">${GM_LABELS[i]}</option>`;
+      }
+      select.innerHTML = options;
+    }
+
+    function buildModalStOptions() { document.getElementById('st-options-box').innerHTML = ST_OPTIONS.map(v => `<button id="st-opt-${v}" class="st-btn" onclick="setFormSt(${v})">${v}</button>`).join(''); }
+    
+    function setFormSt(v) { 
+      currentForm.st = v; 
+      document.getElementById('modal-st').value = v; 
+      if (v > 0) { currentForm.gt = Math.floor(v * 0.75); } else { currentForm.gt = 0; }
+      document.getElementById('modal-gt').value = currentForm.gt; 
+      updateModalUi(); 
+    }
+    function syncFormSt(val) { const v = Number(val); currentForm.st = v; updateModalUi(); }
+    function updateModalUi() { document.getElementById('modal-st-label').innerText = `ST: ${currentForm.st} ${ST_LABELS[currentForm.st] ? `(${ST_LABELS[currentForm.st]})` : ''}`; ST_OPTIONS.forEach(v => { const optBtn = document.getElementById(`st-opt-${v}`); if(optBtn) optBtn.classList.toggle('active', currentForm.st === v); }); }
+    
+    function openEdit(idx) { 
+      buildModalSelect(); 
+      buildModalPcSelect();
+      currentEditIdx = idx; 
+      const data = stgtTracksData[currentTrackIdx]; 
+      if (idx === 'new') { 
+        currentForm = { note: (TRACKS[currentTrackIdx].type === "drum" ? "BD" : "C4"),  st: 96, gt: 72, vel: 100, pc: 0 }; 
+      } else { 
+        currentForm = { ...data[idx] }; 
+      } 
+      document.getElementById('modal-note').value = currentForm.note; 
+      document.getElementById('modal-pc').value = currentForm.pc || 0; 
+      document.getElementById('modal-st').value = currentForm.st; 
+      document.getElementById('modal-gt').value = currentForm.gt; 
+      document.getElementById('modal-vel').value = currentForm.vel; 
+      updateModalUi(); 
+      document.getElementById('edit-modal').style.display = 'block'; 
+      if(idx !== 'new') renderStgtTable(); 
+    }
+    
+    function sanitizeNonNegativeClock(rawValue, fallback) {
+      const value = Number(rawValue);
+      if (!Number.isFinite(value)) return Math.max(0, Math.round(Number(fallback) || 0));
+      return Math.max(0, Math.round(value));
+    }
+
+    function sanitizeMidiVelocity(rawValue, fallback) {
+      const value = Number(rawValue);
+      const safe = Number.isFinite(value) ? Math.round(value) : Math.round(Number(fallback) || 0);
+      return Math.max(0, Math.min(127, safe));
+    }
+
+    function commitEdit() { 
+      const data = stgtTracksData[currentTrackIdx]; 
+      currentForm.note = document.getElementById('modal-note').value; 
+      currentForm.pc = Number(document.getElementById('modal-pc').value); 
+      currentForm.st = sanitizeNonNegativeClock(document.getElementById('modal-st').value, currentForm.st); 
+      currentForm.gt = sanitizeNonNegativeClock(document.getElementById('modal-gt').value, currentForm.gt); 
+      currentForm.vel = sanitizeMidiVelocity(document.getElementById('modal-vel').value, currentForm.vel); 
+
+      // Keep the sanitized values visible if the editor remains open during future changes.
+      document.getElementById('modal-st').value = currentForm.st;
+      document.getElementById('modal-gt').value = currentForm.gt;
+      document.getElementById('modal-vel').value = currentForm.vel;
+      if (currentEditIdx === 'new') { 
+        data.push({ ...currentForm }); 
+      } else { 
+        data[currentEditIdx] = { ...currentForm }; 
+      } 
+      
+      stgtDataToGrid(currentTrackIdx);
+      buildPianoRoll();
+      closeEdit(); 
+    }
+    
+    function closeEdit() { document.getElementById('edit-modal').style.display = 'none'; renderStgtTable(); }
+    function deleteRow(idx) { stgtTracksData[currentTrackIdx].splice(idx, 1); stgtDataToGrid(currentTrackIdx); buildPianoRoll(); renderStgtTable(); }
+    function insertAfter(idx) { stgtTracksData[currentTrackIdx].splice(idx + 1, 0, { note: (TRACKS[currentTrackIdx].type === "drum" ? "BD" : "C4"), st: 96, gt: 72, vel: 100, pc: 0 }); openEdit(idx + 1); }
+    document.getElementById('view-roll').addEventListener('scroll', checkAndAppendBar);
+    
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('PWA大開通！', reg))
+          .catch(err => console.log('PWA不渡り！', err));
+      });
+    }
+
+    buildGmPatchSelect();
+    switchTrack(0);
+  </script>
+</body>
+</html>
