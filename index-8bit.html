@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+  <!-- v0.55.3: redeploy revision; playback/UI logic unchanged from v0.55.2 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.55.2 (8-bit Logic Fixed Edition)</title>
+  <title>DEC●PO v0.55.3 (8-bit Logic Fixed Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #0a0a14; color: #e0e0e0; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: linear-gradient(90deg, #0a0a14 0%, #0d1a2e 50%, #0a0a14 100%); border-bottom: 1px solid #00d4ff33; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -369,7 +370,7 @@
     }
 
     function saveToFile() {
-      const songData = { version: "v0.55.2-8bit-logicfix", bpm: getBpm(), totalSteps: totalSteps, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
+      const songData = { version: "v0.55.3-8bit-logicfix", bpm: getBpm(), totalSteps: totalSteps, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
