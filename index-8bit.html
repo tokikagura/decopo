@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DEC●PO v0.55.1 (8-bit Pitch Fixed Edition)</title>
+  <title>DEC●PO v0.55.2 (8-bit Logic Fixed Edition)</title>
   <style>
     body { margin: 0; padding: 0; background: #0a0a14; color: #e0e0e0; font-family: 'Courier New', monospace; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
     .header { background: linear-gradient(90deg, #0a0a14 0%, #0d1a2e 50%, #0a0a14 100%); border-bottom: 1px solid #00d4ff33; padding: 10px 12px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; }
@@ -183,6 +183,38 @@
     let stgtIndices = [0, 0, 0, 0, 0];
     let stgtTimerIds = [null, null, null, null, null];
     let stgtAccumSt = [0, 0, 0, 0, 0];
+    let stgtActiveIndices = [-1, -1, -1, -1, -1];
+    let lastHighlightedStep = null;
+
+    const REST = "REST";
+
+    function clampNumber(value, min, max, fallback) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.min(max, Math.max(min, n));
+    }
+
+    function getBpm() {
+      const el = document.getElementById('bpm-val');
+      const bpm = Math.round(clampNumber(el.value, 20, 400, 120));
+      el.value = bpm;
+      return bpm;
+    }
+
+    function defaultStgtNote(trackIdx = currentTrackIdx) {
+      return TRACKS[trackIdx].type === 'drum' ? 'SD' : 'C4';
+    }
+
+    function sanitizeStgtRow(row, trackIdx = currentTrackIdx) {
+      const src = row && typeof row === 'object' ? row : {};
+      const allowed = TRACKS[trackIdx].type === 'drum' ? DRUM_TYPES : ALL_NOTES;
+      let note = typeof src.note === 'string' ? src.note : defaultStgtNote(trackIdx);
+      if (note !== REST && !allowed.includes(note)) note = defaultStgtNote(trackIdx);
+      const st = Math.round(clampNumber(src.st, 1, 1536, 16));
+      const gt = Math.round(clampNumber(src.gt, 1, st, Math.min(12, st)));
+      const vel = Math.round(clampNumber(src.vel, 0, 127, 100));
+      return { note, st, gt, vel };
+    }
 
     function buildTrackBar() {
       const bar = document.getElementById('track-bar-content');
@@ -192,34 +224,50 @@
       }).join('');
     }
 
-    function switchTrack(idx) {
+    async function switchTrack(idx) {
+      if (!Number.isInteger(idx) || idx < 0 || idx >= TRACKS.length) return;
+      const stgtVisible = document.getElementById('view-stgt').style.display === 'block';
+      const restartSolo = isPlaying && stgtVisible && stgtPlayMode === 'solo';
+      if (restartSolo) stopPlayback();
       currentTrackIdx = idx;
+      currentEditIdx = null;
+      document.getElementById('edit-modal').style.display = 'none';
       buildTrackBar();
       buildPianoRoll();
-      if(document.getElementById('view-stgt').style.display === 'block') renderStgtTable();
+      buildModalSelect();
+      if (stgtVisible) renderStgtTable();
+      if (restartSolo) await startPlayback();
     }
 
-    function switchMode(mode) {
+    async function switchMode(mode) {
+      if (mode !== 'roll' && mode !== 'stgt') return;
+      const wasPlaying = isPlaying;
+      if (wasPlaying) stopPlayback();
       document.getElementById('btn-roll').classList.toggle('active', mode === 'roll');
       document.getElementById('btn-stgt').classList.toggle('active', mode === 'stgt');
       document.getElementById('view-roll').style.display = mode === 'roll' ? 'block' : 'none';
       document.getElementById('view-stgt').style.display = mode === 'stgt' ? 'block' : 'none';
       document.getElementById('stgt-playback-options').style.display = mode === 'stgt' ? 'flex' : 'none';
-      if(mode === 'stgt') renderStgtTable();
+      document.getElementById('edit-modal').style.display = 'none';
+      currentEditIdx = null;
+      if (mode === 'stgt') renderStgtTable();
+      if (wasPlaying) await startPlayback();
     }
 
-    function setStgtPlayMode(m) {
+    async function setStgtPlayMode(m) {
+      if (m !== 'all' && m !== 'solo') return;
       stgtPlayMode = m;
       document.getElementById('stgt-m-all').classList.toggle('active', m === 'all');
       document.getElementById('stgt-m-solo').classList.toggle('active', m === 'solo');
-      if (isPlaying) { togglePlay(); togglePlay(); } 
+      if (isPlaying) { stopPlayback(); await startPlayback(); }
     }
 
-    function setStgtRange(r) {
+    async function setStgtRange(r) {
+      if (r !== 'full' && r !== 'bar') return;
       stgtRange = r;
       document.getElementById('stgt-r-full').classList.toggle('active', r === 'full');
       document.getElementById('stgt-r-bar').classList.toggle('active', r === 'bar');
-      if (isPlaying) { togglePlay(); togglePlay(); }
+      if (isPlaying) { stopPlayback(); await startPlayback(); }
     }
 
     function checkAndAppendBar(e) {
@@ -237,6 +285,7 @@
     }
 
     function buildPianoRoll() {
+      lastHighlightedStep = null;
       const header = document.getElementById('step-header-content');
       header.innerHTML = Array(totalSteps).fill(0).map((_, i) => {
         const isBarStart = i % 16 === 0;
@@ -320,13 +369,13 @@
     }
 
     function saveToFile() {
-      const bpm = Number(document.getElementById('bpm-val').value) || 120;
-      const songData = { version: "v0.55.1-8bit", bpm: bpm, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
+      const songData = { version: "v0.55.2-8bit-logicfix", bpm: getBpm(), totalSteps: totalSteps, synthTracksData: synthTracksData, drumTrackData: drumTrackData, stgtTracksData: stgtTracksData };
       const blob = new Blob([JSON.stringify(songData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `decopo_8bit_${Date.now()}.json`; a.click();
-      URL.revokeObjectURL(url);
+      a.href = url; a.download = `decopo_8bit_${Date.now()}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     function triggerLoad() { document.getElementById('file-loader').click(); }
@@ -337,16 +386,35 @@
       reader.onload = function(e) {
         try {
           const songData = JSON.parse(e.target.result);
-          if (songData.bpm) { document.getElementById('bpm-val').value = songData.bpm; updateBpm(); }
-          if (songData.synthTracksData) {
-            synthTracksData = songData.synthTracksData;
-            totalSteps = songData.synthTracksData[0]["C4"].length;
+          if (!songData || typeof songData !== 'object') throw new Error('Invalid data');
+          stopPlayback();
+
+          let inferredSteps = Number.isFinite(Number(songData.totalSteps)) ? Math.floor(Number(songData.totalSteps)) : 0;
+          if (Array.isArray(songData.synthTracksData)) {
+            songData.synthTracksData.forEach(track => ALL_NOTES.forEach(note => {
+              if (track && Array.isArray(track[note])) inferredSteps = Math.max(inferredSteps, track[note].length);
+            }));
           }
-          if (songData.drumTrackData) drumTrackData = songData.drumTrackData;
-          if (songData.stgtTracksData) stgtTracksData = songData.stgtTracksData;
-          switchTrack(0);
+          if (songData.drumTrackData && typeof songData.drumTrackData === 'object') {
+            DRUM_TYPES.forEach(type => { if (Array.isArray(songData.drumTrackData[type])) inferredSteps = Math.max(inferredSteps, songData.drumTrackData[type].length); });
+          }
+          totalSteps = Math.max(32, Math.ceil(Math.max(1, inferredSteps) / 16) * 16);
+
+          synthTracksData = Array(4).fill(null).map((_, t) => {
+            const src = Array.isArray(songData.synthTracksData) && songData.synthTracksData[t] ? songData.synthTracksData[t] : {};
+            return Object.fromEntries(ALL_NOTES.map(note => [note, Array.from({length: totalSteps}, (_, i) => !!(Array.isArray(src[note]) && src[note][i]))]));
+          });
+          const srcDrums = songData.drumTrackData && typeof songData.drumTrackData === 'object' ? songData.drumTrackData : {};
+          drumTrackData = Object.fromEntries(DRUM_TYPES.map(type => [type, Array.from({length: totalSteps}, (_, i) => !!(Array.isArray(srcDrums[type]) && srcDrums[type][i]))]));
+          const srcStgt = Array.isArray(songData.stgtTracksData) ? songData.stgtTracksData : [];
+          stgtTracksData = Array(5).fill(null).map((_, t) => (Array.isArray(srcStgt[t]) ? srcStgt[t] : []).map(row => sanitizeStgtRow(row, t)));
+
+          if (songData.bpm != null) document.getElementById('bpm-val').value = songData.bpm;
+          getBpm();
+          currentTrackIdx = 0;
+          buildTrackBar(); buildPianoRoll(); buildModalSelect(); renderStgtTable();
           alert("8bitインフラデータを完全同期いたしやした！");
-        } catch (err) { alert("解析失敗でやんす。"); }
+        } catch (err) { console.error(err); alert("解析失敗でやんす。"); }
       };
       reader.readAsText(file); event.target.value = '';
     }
@@ -396,7 +464,7 @@
       midiEvents.sort((a, b) => (a.time !== b.time) ? a.time - b.time : a.type - b.type);
       let trackData = []; let lastTime = 0;
 
-      const bpm = Number(document.getElementById('bpm-val').value) || 120;
+      const bpm = getBpm();
       const microsecondsPerBeat = Math.round(60000000 / bpm);
       trackData.push(0x00, 0xFF, 0x51, 0x03, (microsecondsPerBeat >> 16) & 0xFF, (microsecondsPerBeat >> 8) & 0xFF, microsecondsPerBeat & 0xFF);
 
@@ -410,8 +478,8 @@
       const trkHeader = [0x4D, 0x54, 0x72, 0x6B, (trkLen >> 24) & 0xFF, (trkLen >> 16) & 0xFF, (trkLen >> 8) & 0xFF, trkLen & 0xFF];
       const midiBlob = new Blob([new Uint8Array([...header, ...trkHeader, ...trackData])], { type: "audio/midi" });
       const url = URL.createObjectURL(midiBlob);
-      const a = document.createElement('a'); a.href = url; a.download = `decopo_8bit_track_${Date.now()}.mid`; a.click();
-      URL.revokeObjectURL(url);
+      const a = document.createElement('a'); a.href = url; a.download = `decopo_8bit_track_${Date.now()}.mid`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     function noteToFreq(note) {
@@ -432,192 +500,168 @@
       oscBase.start(now); oscBase.stop(now + 0.45); oscOvertone.start(now); oscOvertone.stop(now + 0.25); oscAttack.start(now); oscAttack.stop(now + 0.05);
     }
 
-    function playStgtTone(freq, duration, oscType) {
-      if (!audioCtx) return; const now = audioCtx.currentTime;
-      if (oscType === "noise") { playDrum(currentTrackIdx === 4 ? "SD" : "CH"); return; } 
-      const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain(); oscBase.type = oscType; oscBase.frequency.value = freq;
-      const oscOvertone = audioCtx.createOscillator(); const gainOvertone = audioCtx.createGain(); oscOvertone.type = 'sine'; oscOvertone.frequency.value = freq * 2;
-      gainBase.gain.setValueAtTime(0.25, now); gainBase.gain.linearRampToValueAtTime(0.0, now + duration);
-      gainOvertone.gain.setValueAtTime(0.08, now); gainOvertone.gain.linearRampToValueAtTime(0.0, now + (duration * 0.6));
+    function playStgtTone(note, duration, trackIdx, velocity) {
+      if (!audioCtx || velocity <= 0 || note === REST) return;
+      if (TRACKS[trackIdx].type === 'drum') { playDrum(note, velocity); return; }
+      const freq = noteToFreq(note); if (!freq) return;
+      const now = audioCtx.currentTime;
+      const safeDuration = Math.max(0.005, Number(duration) || 0.005);
+      const amp = clampNumber(velocity, 0, 127, 100) / 127;
+      const oscBase = audioCtx.createOscillator(); const gainBase = audioCtx.createGain();
+      const oscOvertone = audioCtx.createOscillator(); const gainOvertone = audioCtx.createGain();
+      oscBase.type = TRACKS[trackIdx].osc; oscBase.frequency.value = freq;
+      oscOvertone.type = 'sine'; oscOvertone.frequency.value = freq * 2;
+      gainBase.gain.setValueAtTime(0.25 * amp, now); gainBase.gain.linearRampToValueAtTime(0.0, now + safeDuration);
+      gainOvertone.gain.setValueAtTime(0.08 * amp, now); gainOvertone.gain.linearRampToValueAtTime(0.0, now + (safeDuration * 0.6));
       oscBase.connect(gainBase); gainBase.connect(audioCtx.destination); oscOvertone.connect(gainOvertone); gainOvertone.connect(audioCtx.destination);
-      oscBase.start(now); oscBase.stop(now + duration + 0.05); oscOvertone.start(now); oscOvertone.stop(now + duration + 0.05);
+      oscBase.start(now); oscBase.stop(now + safeDuration + 0.05); oscOvertone.start(now); oscOvertone.stop(now + safeDuration + 0.05);
     }
 
-    function playDrum(type) {
-      if (!audioCtx) return; const now = audioCtx.currentTime;
+    function playDrum(type, velocity = 100) {
+      if (!audioCtx || !DRUM_TYPES.includes(type) || velocity <= 0) return; const now = audioCtx.currentTime;
+      const amp = clampNumber(velocity, 0, 127, 100) / 127;
       if (!noiseBuffer) {
-        const bufferSize = audioCtx.sampleRate * 0.4; noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const bufferSize = Math.floor(audioCtx.sampleRate * 0.4); noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const data = noiseBuffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
       }
       if (type === "BD") {
         const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = "sine"; osc.frequency.setValueAtTime(140, now); osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.12);
-        gain.gain.setValueAtTime(0.6, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.14);
+        gain.gain.setValueAtTime(0.6 * amp, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.14);
         osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + 0.15);
-      } else if (type === "SD") {
-        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.35, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.18);
-        source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + 0.19);
-      } else if (type === "CH") {
-        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.22, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.03);
-        source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + 0.04);
-      } else if (type === "OH") {
-        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0.0, now + 0.3);
-        source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + 0.31);
+      } else {
+        const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; const gain = audioCtx.createGain();
+        const cfg = type === "SD" ? [0.35,0.18,0.19] : (type === "CH" ? [0.22,0.03,0.04] : [0.2,0.3,0.31]);
+        gain.gain.setValueAtTime(cfg[0] * amp, now); gain.gain.linearRampToValueAtTime(0.0, now + cfg[1]);
+        source.connect(gain); gain.connect(audioCtx.destination); source.start(now); source.stop(now + cfg[2]);
       }
     }
 
-    function togglePlay() {
-      if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-      if (audioCtx.state === 'suspended') { audioCtx.resume(); }
-      const btn = document.getElementById('btn-play');
-      
-      if (isPlaying) { 
-        isPlaying = false; 
-        btn.innerText = "▶ PLAY"; 
-        btn.classList.remove('playing'); 
-        if (timerId) clearInterval(timerId); 
-        stgtTimerIds.forEach(tid => { if(tid) clearTimeout(tid); });
-        stgtTimerIds.fill(null);
-        clearHighlight(); 
-      } 
-      else { 
-        isPlaying = true; 
-        btn.innerText = "■ STOP"; 
-        btn.classList.add('playing'); 
-        
-        const isRollMode = document.getElementById('btn-roll').classList.contains('active');
-        if (isRollMode) {
-          currentStep = 0; runSequencer(); 
-        } else {
-          stgtIndices.fill(0);
-          stgtAccumSt.fill(0);
-          
-          if (stgtPlayMode === 'solo') {
-            runStgtSequencer(currentTrackIdx);
-          } else {
-            for (let t = 0; t < 5; t++) { runStgtSequencer(t); }
-          }
-        }
+    async function togglePlay() {
+      if (isPlaying) stopPlayback(); else await startPlayback();
+    }
+
+    async function startPlayback() {
+      if (!audioCtx || audioCtx.state === 'closed') { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); noiseBuffer = null; }
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      isPlaying = true;
+      const btn = document.getElementById('btn-play'); btn.innerText = "■ STOP"; btn.classList.add('playing');
+      const isRollMode = document.getElementById('btn-roll').classList.contains('active');
+      if (isRollMode) { currentStep = 0; runSequencer(); }
+      else {
+        stgtIndices.fill(0); stgtActiveIndices.fill(-1); stgtAccumSt.fill(0);
+        if (stgtPlayMode === 'solo') runStgtSequencer(currentTrackIdx); else for (let t = 0; t < 5; t++) runStgtSequencer(t);
       }
     }
 
-    function updateBpm() { if (isPlaying) { if (timerId) { clearInterval(timerId); runSequencer(); } } }
-    
+    function stopPlayback() {
+      isPlaying = false;
+      const btn = document.getElementById('btn-play'); if (btn) { btn.innerText = "▶ PLAY"; btn.classList.remove('playing'); }
+      if (timerId !== null) { clearInterval(timerId); timerId = null; }
+      stgtTimerIds.forEach(tid => { if (tid !== null) clearTimeout(tid); }); stgtTimerIds.fill(null);
+      stgtActiveIndices.fill(-1); clearHighlight();
+    }
+
+    async function updateBpm() {
+      getBpm();
+      if (isPlaying) { stopPlayback(); await startPlayback(); }
+    }
+
     function runSequencer() {
-      const bpm = Number(document.getElementById('bpm-val').value) || 120; const interval = (60 / bpm / 4) * 1000;
+      const bpm = getBpm(); const interval = (60 / bpm / 4) * 1000;
       const stepExecution = () => {
-        clearHighlight();
-        const headerCell = document.getElementById(`header-step-${currentStep}`); if (headerCell) headerCell.classList.add('active-step');
+        if (!isPlaying) return;
+        highlightRollStep(currentStep);
         for (let t = 0; t < 4; t++) {
           ALL_NOTES.forEach(note => { if (synthTracksData[t][note] && synthTracksData[t][note][currentStep]) { playTone(noteToFreq(note), TRACKS[t].osc); } });
         }
-        DRUM_TYPES.forEach(type => { if (drumTrackData[type] && drumTrackData[type][currentStep]) { playDrum(type); } });
-
-        const isDrum = TRACKS[currentTrackIdx].type === "drum";
-        if (!isDrum) {
-          ALL_NOTES.forEach(note => { const cell = document.getElementById(`cell-${note}-${currentStep}`); if (cell) cell.classList.add('active-column'); });
-        } else {
-          DRUM_TYPES.forEach(type => { const cell = document.getElementById(`cell-${type}-${currentStep}`); if (cell) cell.classList.add('active-column'); });
-        }
+        DRUM_TYPES.forEach(type => { if (drumTrackData[type] && drumTrackData[type][currentStep]) { playDrum(type, 100); } });
         currentStep = (currentStep + 1) % totalSteps;
       };
       stepExecution(); timerId = setInterval(stepExecution, interval);
     }
 
     function runStgtSequencer(t) {
-      const data = stgtTracksData[t];
-      if (data.length === 0) return;
-
       const stepExecution = () => {
         if (!isPlaying) return;
-
-        if (t === currentTrackIdx && document.getElementById('view-stgt').style.display === 'block') {
-          renderStgtTable();
-        }
-
-        let idx = stgtIndices[t];
-        const row = data[idx];
-        const bpm = Number(document.getElementById('bpm-val').value) || 120;
-        const unitTime = (60 / bpm) / 16; 
-
-        if (row.note && row.note !== "REST") {
-          const freq = noteToFreq(row.note);
-          const duration = row.gt * unitTime;
-          playStgtTone(freq, duration, TRACKS[t].osc);
-        }
-
-        const nextDelay = row.st * unitTime * 1000;
+        const data = stgtTracksData[t];
+        if (!Array.isArray(data) || data.length === 0) { stgtActiveIndices[t] = -1; return; }
+        const idx = stgtIndices[t] % data.length;
+        const row = sanitizeStgtRow(data[idx], t); data[idx] = row; stgtActiveIndices[t] = idx;
+        if (t === currentTrackIdx && document.getElementById('view-stgt').style.display === 'block') renderStgtTable();
+        const unitTime = (60 / getBpm()) / 16;
+        if (row.note !== REST && row.vel > 0) playStgtTone(row.note, row.gt * unitTime, t, row.vel);
         let nextIdx = (idx + 1) % data.length;
-
         if (stgtRange === 'bar') {
           stgtAccumSt[t] += row.st;
-          if (stgtAccumSt[t] >= 64 || nextIdx === 0) {
-            nextIdx = 0;       
-            stgtAccumSt[t] = 0; 
-          }
-        } else {
-          stgtAccumSt[t] = 0;
-        }
-
+          if (stgtAccumSt[t] >= 64 || nextIdx === 0) { nextIdx = 0; stgtAccumSt[t] = 0; }
+        } else stgtAccumSt[t] = 0;
         stgtIndices[t] = nextIdx;
-        stgtTimerIds[t] = setTimeout(stepExecution, nextDelay);
+        stgtTimerIds[t] = setTimeout(stepExecution, Math.max(1, row.st * unitTime * 1000));
       };
-
       stepExecution();
     }
 
+    function clearRollHighlight() {
+      if (lastHighlightedStep === null) return;
+      const step = lastHighlightedStep;
+      const hc = document.getElementById(`header-step-${step}`); if (hc) hc.classList.remove('active-step');
+      const keys = TRACKS[currentTrackIdx].type === 'drum' ? DRUM_TYPES : ALL_NOTES;
+      keys.forEach(key => { const cell = document.getElementById(`cell-${key}-${step}`); if (cell) cell.classList.remove('active-column'); });
+      lastHighlightedStep = null;
+    }
+
+    function highlightRollStep(step) {
+      clearRollHighlight();
+      const hc = document.getElementById(`header-step-${step}`); if (hc) hc.classList.add('active-step');
+      const keys = TRACKS[currentTrackIdx].type === 'drum' ? DRUM_TYPES : ALL_NOTES;
+      keys.forEach(key => { const cell = document.getElementById(`cell-${key}-${step}`); if (cell) cell.classList.add('active-column'); });
+      lastHighlightedStep = step;
+    }
+
     function clearHighlight() {
-      for (let i = 0; i < totalSteps; i++) { const hc = document.getElementById(`header-step-${i}`); if (hc) hc.classList.remove('active-step'); }
-      const isDrum = TRACKS[currentTrackIdx].type === "drum";
-      if (!isDrum) {
-        ALL_NOTES.forEach(note => { for (let i = 0; i < totalSteps; i++) { const cell = document.getElementById(`cell-${note}-${i}`); if (cell) cell.classList.remove('active-column'); } });
-      } else {
-        DRUM_TYPES.forEach(type => { for (let i = 0; i < totalSteps; i++) { const cell = document.getElementById(`cell-${type}-${i}`); if (cell) cell.classList.remove('active-column'); } });
-      }
+      clearRollHighlight();
       if(document.getElementById('view-stgt').style.display === 'block') renderStgtTable();
     }
 
     function renderStgtTable() {
       const container = document.getElementById('stgt-rows-content');
       const isStgtMode = document.getElementById('btn-stgt').classList.contains('active');
-      const data = stgtTracksData[currentTrackIdx];
-      
-      container.innerHTML = data.map((row, i) => {
-        const idxCur = stgtIndices[currentTrackIdx];
-        const isCurrent = isPlaying && isStgtMode && (
-          idxCur === (i + 1) % data.length || (idxCur === 0 && i === data.length - 1)
-        );
-
+      const data = stgtTracksData[currentTrackIdx]; const isDrum = TRACKS[currentTrackIdx].type === 'drum';
+      container.innerHTML = data.map((rawRow, i) => {
+        const row = sanitizeStgtRow(rawRow, currentTrackIdx); data[i] = row;
+        const isCurrent = isPlaying && isStgtMode && stgtActiveIndices[currentTrackIdx] === i;
         let bg = isCurrent ? '#00ff8822' : (currentEditIdx === i ? '#0d1a2e' : 'transparent');
-        let color = isCurrent ? '#00ff88' : '#e0e0e0';
-        let weight = isCurrent ? 'bold' : 'normal';
-        let border = isCurrent ? '1px solid #00ff8844' : '1px solid #111';
-
+        let color = isCurrent ? '#00ff88' : '#e0e0e0'; let weight = isCurrent ? 'bold' : 'normal'; let border = isCurrent ? '1px solid #00ff8844' : '1px solid #111';
+        let noteColor = row.note === REST ? '#666' : (isDrum ? '#00ff88' : (BLACK_NOTES.includes(row.note.replace(/\d/,"")) ? '#ff6b35' : '#00d4ff'));
         return `
           <div class="stgt-row" onclick="openEdit(${i})" style="background: ${bg}; color: ${color}; font-weight: ${weight}; border-bottom: ${border};">
             <div style="color: ${isCurrent ? '#00ff88' : '#333'}; font-size: 9px;">${i + 1}</div>
-            <div style="color: ${isCurrent ? '#00ff88' : (BLACK_NOTES.includes(row.note.replace(/\d/,"")) ? '#ff6b35' : '#00d4ff')}; font-size: 12px; font-weight: bold;">${row.note}</div>
+            <div style="color: ${isCurrent ? '#00ff88' : noteColor}; font-size: 12px; font-weight: bold;">${row.note}</div>
             <div style="font-size: 11px;">${row.st}${ST_LABELS[row.st] ? `(${ST_LABELS[row.st]})` : ''}</div>
             <div style="font-size: 11px; opacity: 0.7;">${row.gt}</div>
             <div style="font-size: 11px; opacity: 0.7;">${row.vel}</div>
             <div onclick="event.stopPropagation(); insertAfter(${i});" style="color: #00d4ff66; font-size: 16px; text-align: center;">+</div>
             <div onclick="event.stopPropagation(); deleteRow(${i});" style="color: #ff335566; font-size: 12px; text-align: center;">✕</div>
-          </div>
-        `;
+          </div>`;
       }).join('');
     }
-    
-    function buildModalSelect() { document.getElementById('modal-note').innerHTML = ALL_NOTES.map(n => `<option value="${n}">${n}</option>`).join(''); }
+
+    function buildModalSelect() {
+      const choices = TRACKS[currentTrackIdx].type === 'drum' ? [REST, ...DRUM_TYPES] : [REST, ...ALL_NOTES];
+      document.getElementById('modal-note').innerHTML = choices.map(n => `<option value="${n}">${n}</option>`).join('');
+    }
+
     function buildModalStOptions() { document.getElementById('st-options-box').innerHTML = ST_OPTIONS.map(v => `<button id="st-opt-${v}" class="st-btn" onclick="setFormSt(${v})">${v}</button>`).join(''); }
     
-    function setFormSt(v) { 
-      currentForm.st = v; 
-      document.getElementById('modal-st').value = v;
-      if (currentForm.gt > v) currentForm.gt = v; 
-      document.getElementById('modal-gt').value = currentForm.gt; 
-      updateModalUi(); 
+    function setFormSt(v) {
+      currentForm.st = Math.round(clampNumber(v, 1, 1536, 16));
+      document.getElementById('modal-st').value = currentForm.st;
+      if (currentForm.gt > currentForm.st) currentForm.gt = currentForm.st;
+      document.getElementById('modal-gt').value = currentForm.gt;
+      updateModalUi();
     }
-    
-    function syncFormSt(val) { const v = Number(val); currentForm.st = v; updateModalUi(); }
+
+    function syncFormSt(val) { currentForm.st = Math.round(clampNumber(val, 1, 1536, 16)); updateModalUi(); }
 
     function updateModalUi() { 
       document.getElementById('modal-st-label').innerText = `ST: ${currentForm.st} ${ST_LABELS[currentForm.st] ? `(${ST_LABELS[currentForm.st]})` : ''}`; 
@@ -626,38 +670,33 @@
       }); 
     }
 
-    function openEdit(idx) { 
-      currentEditIdx = idx; 
-      const data = stgtTracksData[currentTrackIdx];
-      if (idx === 'new') { currentForm = { note: "C4", st: 16, gt: 12, vel: 100 }; } 
-      else { currentForm = { ...data[idx] }; } 
-      document.getElementById('modal-note').value = currentForm.note; 
-      document.getElementById('modal-st').value = currentForm.st;
-      document.getElementById('modal-gt').value = currentForm.gt; 
-      document.getElementById('modal-vel').value = currentForm.vel; 
-      updateModalUi(); 
-      document.getElementById('edit-modal').style.display = 'block'; 
-      if(idx !== 'new') renderStgtTable(); 
+    function openEdit(idx) {
+      currentEditIdx = idx; const data = stgtTracksData[currentTrackIdx]; buildModalSelect();
+      if (idx === 'new') currentForm = { note: defaultStgtNote(), st: 16, gt: 12, vel: 100 };
+      else { if (!Number.isInteger(idx) || idx < 0 || idx >= data.length) return; currentForm = sanitizeStgtRow(data[idx], currentTrackIdx); }
+      document.getElementById('modal-note').value = currentForm.note;
+      document.getElementById('modal-st').value = currentForm.st; document.getElementById('modal-gt').value = currentForm.gt; document.getElementById('modal-vel').value = currentForm.vel;
+      updateModalUi(); document.getElementById('edit-modal').style.display = 'block'; if(idx !== 'new') renderStgtTable();
     }
 
-    function commitEdit() { 
+    function commitEdit() {
       const data = stgtTracksData[currentTrackIdx];
-      currentForm.note = document.getElementById('modal-note').value; 
-      currentForm.st = Number(document.getElementById('modal-st').value);
-      currentForm.gt = Number(document.getElementById('modal-gt').value); 
-      currentForm.vel = Number(document.getElementById('modal-vel').value); 
-      if (currentEditIdx === 'new') { data.push({ ...currentForm }); } 
-      else { data[currentEditIdx] = { ...currentForm }; } 
-      closeEdit(); 
+      const row = sanitizeStgtRow({ note: document.getElementById('modal-note').value, st: document.getElementById('modal-st').value, gt: document.getElementById('modal-gt').value, vel: document.getElementById('modal-vel').value }, currentTrackIdx);
+      currentForm = { ...row };
+      if (currentEditIdx === 'new') data.push(row); else if (Number.isInteger(currentEditIdx) && currentEditIdx >= 0 && currentEditIdx < data.length) data[currentEditIdx] = row;
+      closeEdit();
     }
 
-    function closeEdit() { document.getElementById('edit-modal').style.display = 'none'; renderStgtTable(); }
-    function deleteRow(idx) { stgtTracksData[currentTrackIdx].splice(idx, 1); renderStgtTable(); }
-    function insertAfter(idx) { stgtTracksData[currentTrackIdx].splice(idx + 1, 0, { note: "C4", st: 16, gt: 12, vel: 100 }); openEdit(idx + 1); }
+    function closeEdit() { document.getElementById('edit-modal').style.display = 'none'; currentEditIdx = null; renderStgtTable(); }
 
-    document.getElementById('view-roll').addEventListener('scroll', checkAndAppendBar);
+    function deleteRow(idx) { const data = stgtTracksData[currentTrackIdx]; if (!Number.isInteger(idx) || idx < 0 || idx >= data.length) return; data.splice(idx, 1); if (stgtIndices[currentTrackIdx] >= data.length) stgtIndices[currentTrackIdx] = 0; stgtActiveIndices[currentTrackIdx] = -1; renderStgtTable(); }
+
+    function insertAfter(idx) { const data = stgtTracksData[currentTrackIdx]; if (!Number.isInteger(idx) || idx < 0 || idx >= data.length) return; data.splice(idx + 1, 0, { note: defaultStgtNote(), st: 16, gt: 12, vel: 100 }); openEdit(idx + 1); }
+
+    document.getElementById('view-roll').addEventListener('scroll', checkAndAppendBar, { passive: true });
 
     buildTrackBar(); buildPianoRoll(); buildModalSelect(); buildModalStOptions();
-  </script>
+
+</script>
 </body>
 </html>
